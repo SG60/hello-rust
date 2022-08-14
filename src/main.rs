@@ -41,5 +41,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await?;
     println!("{:#?}", res);
 
+    let res2 = client
+        .get("https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=4")
+        .bearer_auth("testtoken")
+        .send()
+        .await?
+        .json::<serde_json::Value>()
+        .await?;
+    println!("{}", res2);
+
     Ok(())
 }
