@@ -1,10 +1,34 @@
 use config::Config;
+use reqwest::header::{self, AUTHORIZATION};
 use serde::{Deserialize, Serialize};
 use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Settings {
     notion_api_key: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct NotionResponse {
+    has_more: bool,
+    next_cursor: Option<String>,
+    object: String,
+    results: Vec<serde_json::Value>,
+    #[serde(rename = "type")]
+    t: String,
+    user: serde_json::Value,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct GoogleResponse {
+    items: Vec<serde_json::Value>,
+    kind: String,
+    #[serde(rename = "nextPageToken")]
+    next_page_token: Option<String>,
+    summary: String,
+    #[serde(rename = "timeZone")]
+    time_zone: String,
+    updated: String,
 }
 
 #[tokio::main]
@@ -14,21 +38,68 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .add_source(config::Environment::with_prefix("APP"))
         .build()
         .unwrap();
-    let settings_map: Settings = settings.try_deserialize().unwrap();
+    let settings_map: Settings = settings.try_deserialize()?;
     println!("{:#?}", settings_map);
 
+    // Default headers for notion client
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+        AUTHORIZATION,
+        reqwest::header::HeaderValue::from_str(
+            &("Bearer ".to_string() + &settings_map.notion_api_key),
+        )?,
+    );
+    headers.insert(
+        "Notion-Version",
+        header::HeaderValue::from_static("2022-06-28"),
+    );
+
+    // client for notion requests
+    let notion_client = reqwest::Client::builder()
+        .default_headers(headers)
+        .build()?;
+
     // Make a request to the Notion API
-    let client = reqwest::Client::new();
-    let res = client
+    let res = notion_client
         .get("https://api.notion.com/v1/users")
-        .header("Notion-Version", "2022-06-28")
-        .bearer_auth(settings_map.notion_api_key)
         .send()
         .await?
-        .json::<serde_json::Value>()
+        .json::<NotionResponse>()
         .await?;
-    println!("{:#?}", res);
 
+    println!("from the Notion response:\n{:#?}", res.results[1]);
+
+    match google_get_bearer_token().await {
+        Ok(bearer_token) => {
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert(
+                AUTHORIZATION,
+                reqwest::header::HeaderValue::from_str(
+                    &("Bearer ".to_string() + &bearer_token.as_str()),
+                )?,
+            );
+            // client for google requests
+            let google_client = reqwest::Client::builder()
+                .default_headers(headers)
+                .build()?;
+
+            // Do a request using the google token
+            let res2 = google_client
+                .get("https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=4")
+                .bearer_auth(bearer_token.as_str())
+                .send()
+                .await?
+                .json::<GoogleResponse>()
+                .await?;
+            println!("from the google response:\n{:#?}", res2.items[0]["summary"]);
+        }
+        Err(e) => println!("error: {:?}", e),
+    }
+
+    Ok(())
+}
+
+async fn google_get_bearer_token() -> Result<yup_oauth2::AccessToken, yup_oauth2::Error> {
     // OAuth 2 Stuff ---------------------------------------------------------------------
     // Read application secret from a file. Sometimes it's easier to compile it directly into
     // the binary. The clientsecret file contains JSON like `{"installed":{"client_id": ... }}`
@@ -40,32 +111,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // authentication tokens are persisted to a file named tokencache.json. The
     // authenticator takes care of caching tokens to disk and refreshing tokens once
     // they've expired.
-    let auth =
-        InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::Interactive)
-            .persist_tokens_to_disk("oauthtokencache.json")
-            .build()
-            .await
-            .unwrap();
+    let auth = InstalledFlowAuthenticator::builder(secret, InstalledFlowReturnMethod::Interactive)
+        .persist_tokens_to_disk("oauthtokencache.json")
+        .build()
+        .await
+        .unwrap();
 
     let scopes = &["https://www.googleapis.com/auth/calendar.readonly"];
     // token(<scopes>) is the one important function of this crate; it does everything to
     // obtain a token that can be sent e.g. as Bearer token.
-    match auth.token(scopes).await {
-        Ok(bearer_token) => {
-            println!("The token is {:?}", bearer_token);
-
-            // Do a request using the google token
-            let res2 = client
-                .get("https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=4")
-                .bearer_auth(bearer_token.as_str())
-                .send()
-                .await?
-                .json::<serde_json::Value>()
-                .await?;
-            println!("{:#?}", res2);
-        }
-        Err(e) => println!("error: {:?}", e),
-    }
-
-    Ok(())
+    auth.token(scopes).await
 }
