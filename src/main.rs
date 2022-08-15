@@ -1,16 +1,5 @@
 use config::Config;
-use ferris_says::say;
 use serde::{Deserialize, Serialize};
-use std::io::{stdout, BufWriter};
-
-fn ferris_say() {
-    let stdout = stdout();
-    let message = String::from("Hello fellow Rustaceans!");
-    let width = message.chars().count();
-
-    let mut writer = BufWriter::new(stdout.lock());
-    say(message.as_bytes(), width, &mut writer).unwrap();
-}
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Settings {
@@ -19,8 +8,6 @@ struct Settings {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    ferris_say();
-
     // Env vars! -----------------------------------
     let settings = Config::builder()
         .add_source(config::Environment::with_prefix("APP"))
