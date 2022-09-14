@@ -3,32 +3,11 @@ use reqwest::header::{self, AUTHORIZATION};
 use serde::{Deserialize, Serialize};
 use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 
+use hello_rust::{GoogleResponse, NotionResponse};
+
 #[derive(Serialize, Deserialize, Debug)]
 struct Settings {
     notion_api_key: String,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct NotionResponse {
-    has_more: bool,
-    next_cursor: Option<String>,
-    object: String,
-    results: Vec<serde_json::Value>,
-    #[serde(rename = "type")]
-    t: String,
-    user: serde_json::Value,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-struct GoogleResponse {
-    items: Vec<serde_json::Value>,
-    kind: String,
-    #[serde(rename = "nextPageToken")]
-    next_page_token: Option<String>,
-    summary: String,
-    #[serde(rename = "timeZone")]
-    time_zone: String,
-    updated: String,
 }
 
 #[tokio::main]
@@ -95,6 +74,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => println!("error: {:?}", e),
     }
+
+    println!("asdadfafdasfd");
 
     Ok(())
 }
