@@ -1,3 +1,3 @@
 # hello-rust
 
-Run: `env $(cat .env | xargs) cargo run`
+Uses Just (see the justfile) for running scripts etc.
