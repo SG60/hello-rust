@@ -1,23 +1,16 @@
-use config::Config;
 use reqwest::header::{self, AUTHORIZATION};
-use serde::{Deserialize, Serialize};
 use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 
 use hello_rust::{GoogleResponse, NotionResponse};
 
-#[derive(Serialize, Deserialize, Debug)]
-struct Settings {
-    notion_api_key: String,
-}
+mod settings;
+
+use crate::settings::get_settings;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Env vars! -----------------------------------
-    let settings = Config::builder()
-        .add_source(config::Environment::with_prefix("APP"))
-        .build()
-        .unwrap();
-    let settings_map: Settings = settings.try_deserialize()?;
+    let settings_map = get_settings()?;
     println!("{:#?}", settings_map);
 
     // Default headers for notion client
