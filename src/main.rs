@@ -5,12 +5,10 @@ use hello_rust::{GoogleResponse, NotionResponse};
 
 mod settings;
 
-use crate::settings::get_settings;
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Env vars! -----------------------------------
-    let settings_map = get_settings()?;
+    let settings_map = settings::get_settings()?;
     println!("{:#?}", settings_map);
 
     // Default headers for notion client
@@ -47,7 +45,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             headers.insert(
                 AUTHORIZATION,
                 reqwest::header::HeaderValue::from_str(
-                    &("Bearer ".to_string() + &bearer_token.as_str()),
+                    &("Bearer ".to_string() + bearer_token.as_str()),
                 )?,
             );
             // client for google requests

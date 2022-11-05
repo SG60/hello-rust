@@ -13,5 +13,5 @@ pub fn get_settings() -> Result<Settings, ConfigError> {
         .build()
         .unwrap();
 
-    return settings.try_deserialize();
+    settings.try_deserialize()
 }
