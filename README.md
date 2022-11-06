@@ -42,9 +42,9 @@ The DB just stores sync settings and refresh tokens.
 	<tr><td rowSpan=0>notionUserId
 	<tr><td rowspan=2>details<th>googleRefreshToken<th>notionRefreshToken<th>googleUserId
 		<tr><td>abcdsafeeasf<td>c<td>user123456
-	<tr><td rowspan=2>sync#0<th>notionTable<th>googleCalendar<th>notionTitleId<th>notionDoneId
+	<tr><td rowspan=2>sync#0<th>notionDatabase<th>googleCalendar<th>notionTitleId<th>notionDoneId
 		<tr><td>1234<td>1234<td>asdf3<td>flkjhs
-	<tr><td rowspan=2>sync#1<th>notionTable<th>googleCalendar
+	<tr><td rowspan=2>sync#1<th>notionDatabase<th>googleCalendar
 		<tr><td>1234<td>1234
 </tbody>
 </table>
