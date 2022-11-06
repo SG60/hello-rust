@@ -2,9 +2,11 @@
 
 # hello-rust
 
+frontend - https://github.com/SG60/hello-rust-frontend
+
 <details>
 <summary>
-Deployed to ??!?!?!
+Deployed to AWS?!
 </summary>
 
 https://eu-west-2.console.aws.amazon.com/dynamodbv2/home?region=eu-west-2#item-explorer?initialTagKey=&table=tasks
