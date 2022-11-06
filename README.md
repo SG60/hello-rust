@@ -35,17 +35,23 @@ The DB just stores sync settings and refresh tokens.
 <table>
 <caption>DB Example</caption>
 <tr>
-        <th scope="col" colspan=2>PK</th>
-        <th scope="col" colspan=99999>Attributes</th>
+	<th scope="col" colspan=2>PK</th>
+	<th scope="col" colspan=99999>Attributes</th>
+</tr>
+<tr>
+	<th scope="col">userId</th>
+	<th scope="col">SK (GSI-1-PK)</th>
+	<th scope="col">data (GSI-1-SK)</th>
+	<th scope="col" colspan=99999></th>
 </tr>
 <tbody>
 	<tr><td rowSpan=0>notionUserId
-	<tr><td rowspan=2>details<th>googleRefreshToken<th>notionRefreshToken<th>googleUserId
-		<tr><td>abcdsafeeasf<td>c<td>user123456
-	<tr><td rowspan=2>sync#0<th>notionDatabase<th>googleCalendar<th>notionTitleId<th>notionDoneId
-		<tr><td>1234<td>1234<td>asdf3<td>flkjhs
-	<tr><td rowspan=2>sync#1<th>notionDatabase<th>googleCalendar
-		<tr><td>1234<td>1234
+	<tr><td rowspan=2>userDetails<th>notionUserId (data)<th>googleU<th>googleRefreshToken<th>notionRefreshToken
+		<tr><td>notionU#notionUserId<td>googleU123456<td>asdfasefa<td>asdfasefa
+	<tr><td rowspan=2>sync#0<th>timestamp (data)<th>notionDatabase<th>googleCalendar<th>notionTitleId<th>notionDoneId
+		<tr><td>1667695936<td>asdfase<td>asdf3<td>flkjhs<td>asdfasefa
+	<tr><td rowspan=2>sync#2<th>timestamp (data)<th>notionDatabase<th>googleCalendar<th>notionTitleId<th>notionDoneId
+		<tr><td>1061395921<td>asdfase<td>asdf3<td>flkjhs<td>asdfasefa
 </tbody>
 </table>
 
