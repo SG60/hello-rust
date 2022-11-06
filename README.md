@@ -60,3 +60,7 @@ The DB just stores sync settings and refresh tokens.
 Probably doesn't need rows for items. Maybe they can all just be stored in memory.
 
 https://eu-west-2.console.aws.amazon.com/dynamodbv2/home?region=eu-west-2#item-explorer?initialTagKey=&table=tasks
+
+# Notion Integration
+
+https://www.notion.so/my-integrations/public/f8014299c7f64cac8315d858c2aab2c8
