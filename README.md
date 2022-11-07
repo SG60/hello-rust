@@ -35,8 +35,9 @@ https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.
 
 The DB just stores sync settings and refresh tokens.
 
+## DB Schema
+
 <table>
-<caption>DB Example</caption>
 <tr>
 	<th scope="col" colspan=2>PK</th>
 	<th scope="col" colspan=99999>Attributes</th>
