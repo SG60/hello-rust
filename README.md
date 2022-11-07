@@ -3,6 +3,7 @@
 # hello-rust
 
 frontend - https://github.com/SG60/hello-rust-frontend
+https://www.notion.so/samgreening/Notion-Block-Sync-b0735065a45d48d6aeaef63bf07b7a96
 
 <details>
 <summary>
