@@ -51,7 +51,7 @@ The DB just stores sync settings and refresh tokens.
 <tbody>
 	<tr><td rowSpan=0>notion integration bot_id
 	<tr><td rowspan=2>userDetails<th>notion bot_id (data)<th>googleU<th>googleRefreshToken<th>notionRefreshToken<th>other stuff?
-		<tr><td>notionB#bot_id<td>googleU123456<td>asdfasefa<td>asdfasefa<td>workspace name, workspace emoji, etc.
+		<tr><td>notionB#bot_id<td>googleU#123456<td>asdfasefa<td>asdfasefa<td>workspace name, workspace emoji, etc.
 	<tr><td rowspan=2>sync#0<th>timestamp (data)<th>notionDatabase<th>googleCalendar<th>notionTitleId<th>notionDoneId
 		<tr><td>1667695936<td>asdfase<td>asdf3<td>flkjhs<td>asdfasefa
 	<tr><td rowspan=2>sync#2<th>timestamp (data)<th>notionDatabase<th>googleCalendar<th>notionTitleId<th>notionDoneId
