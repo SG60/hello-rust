@@ -66,3 +66,7 @@ https://eu-west-2.console.aws.amazon.com/dynamodbv2/home?region=eu-west-2#item-e
 # Notion Integration
 
 https://www.notion.so/my-integrations/public/f8014299c7f64cac8315d858c2aab2c8
+
+# Postman Workspace
+
+https://web.postman.co/workspace/fe759fe4-0286-4679-860f-6dc84d8af0fc
