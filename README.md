@@ -53,10 +53,10 @@ The DB just stores sync settings and refresh tokens.
 <tr><td rowSpan=0>firebase auth user id
 	<tr><td rowspan=2>userDetails
 		<th>type	<th>data	<th>notion bot_id	<th>googleRefreshToken	<th>notionAccessToken	<th>other stuff
-		<tr><td>userDetails<td>ACTIVE	<td>notionB#bot_id	<td>asdfasefa		<td>asdfasefa		<td>workspace name, workspace emoji, etc.
+		<tr><td>userDetails<td>ACTIVE or INACTIVE<td>notionB#bot_id	<td>asdfasefa		<td>asdfasefa		<td>workspace name, workspace emoji, etc.
 	<tr><td rowspan=2>sync#0
-		<th>type	<th>data (next sync timestamp) (or null)<th>last sync<th>notionDatabase<th>googleCalendar<th>notionTitleId<th>notionDoneId
-		<tr><td>sync	<td>SCHEDULED#2007-04-05T14:30Z	<td>LAST#2007-04-05T14:30Z<td>asdfase<td>asdf3<td>flkjhs<td>asdfasefa
+		<th>type<th>data (next sync timestamp)<th>last sync<th>notionDatabase<th>googleCalendar<th>notionTitleId<th>notionDoneId
+		<tr><td>sync<td>SCHEDULED#2007-04-05T14:30Z<br>or DISABLED<br>or ERROR<td>LAST#2007-04-05T14:30Z<td>asdfase<td>asdf3<td>flkjhs<td>asdfasefa
 </tbody>
 </table>
 
