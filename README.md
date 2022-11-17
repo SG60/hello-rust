@@ -63,6 +63,8 @@ The DB just stores sync settings and refresh tokens.
 GSI-1 will be:
 <table><td>type (e.g. userDetails)<td>data</table>
 
+This should allow sorting all active syncs (e.g. 'sync' + startsWith 'SCHEDULED#') and other useful queries.
+
 Probably doesn't need rows for items. Maybe they can all just be stored in memory.
 
 https://eu-west-2.console.aws.amazon.com/dynamodbv2/home?region=eu-west-2#item-explorer?initialTagKey=&table=tasks
