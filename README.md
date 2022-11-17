@@ -44,20 +44,24 @@ The DB just stores sync settings and refresh tokens.
 </tr>
 <tr>
 	<th scope="col">userId</th>
-	<th scope="col">SK (GSI-1-PK)</th>
+	<th scope="col">SK</th>
+	<th scope="col">type (GSI-1-PK)</th>
 	<th scope="col">data (GSI-1-SK)</th>
 	<th scope="col" colspan=99999></th>
 </tr>
 <tbody>
-	<tr><td rowSpan=0>notion integration bot_id
-	<tr><td rowspan=2>userDetails<th>notion bot_id (data)<th>googleU<th>googleRefreshToken<th>notionAccessToken<th>other stuff?
-		<tr><td>notionB#bot_id<td>googleU#123456<td>asdfasefa<td>asdfasefa<td>workspace name, workspace emoji, etc.
-	<tr><td rowspan=2>sync#0<th>timestamp (data)<th>notionDatabase<th>googleCalendar<th>notionTitleId<th>notionDoneId
-		<tr><td>1667695936<td>asdfase<td>asdf3<td>flkjhs<td>asdfasefa
-	<tr><td rowspan=2>sync#2<th>timestamp (data)<th>notionDatabase<th>googleCalendar<th>notionTitleId<th>notionDoneId
-		<tr><td>1061395921<td>asdfase<td>asdf3<td>flkjhs<td>asdfasefa
+<tr><td rowSpan=0>firebase auth user id
+	<tr><td rowspan=2>userDetails
+		<th>type	<th>data	<th>notion bot_id	<th>googleRefreshToken	<th>notionAccessToken	<th>other stuff
+		<tr><td>userDetails<td>ACTIVE	<td>notionB#bot_id	<td>asdfasefa		<td>asdfasefa		<td>workspace name, workspace emoji, etc.
+	<tr><td rowspan=2>sync#0
+		<th>type	<th>data (next sync timestamp) (or null)<th>last sync<th>notionDatabase<th>googleCalendar<th>notionTitleId<th>notionDoneId
+		<tr><td>sync	<td>SCHEDULED#2007-04-05T14:30Z	<td>LAST#2007-04-05T14:30Z<td>asdfase<td>asdf3<td>flkjhs<td>asdfasefa
 </tbody>
 </table>
+
+GSI-1 will be:
+<table><td>type (e.g. userDetails)<td>data</table>
 
 Probably doesn't need rows for items. Maybe they can all just be stored in memory.
 
