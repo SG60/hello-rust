@@ -69,6 +69,8 @@ Probably doesn't need rows for items. Maybe they can all just be stored in memor
 
 https://eu-west-2.console.aws.amazon.com/dynamodbv2/home?region=eu-west-2#item-explorer?initialTagKey=&table=tasks
 
+https://console.firebase.google.com/project/notion-sync-tools/authentication/users
+
 # Notion Integration
 
 https://www.notion.so/my-integrations/public/f8014299c7f64cac8315d858c2aab2c8
