@@ -3,72 +3,24 @@ use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 
 use hello_rust::{GoogleResponse, NotionResponse};
 
+mod aws;
 mod settings;
-
-use crate::settings::get_settings;
+use aws::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Env vars! -----------------------------------
-    let settings_map = get_settings()?;
+    let settings_map = settings::get_settings();
     println!("{:#?}", settings_map);
 
-    // Default headers for notion client
-    let mut headers = reqwest::header::HeaderMap::new();
-    headers.insert(
-        AUTHORIZATION,
-        reqwest::header::HeaderValue::from_str(
-            &("Bearer ".to_string() + &settings_map.notion_api_key),
-        )?,
-    );
-    headers.insert(
-        "Notion-Version",
-        header::HeaderValue::from_static("2022-06-28"),
-    );
+    let dynamo_db_client = load_client().await;
 
-    // client for notion requests
-    let notion_client = reqwest::Client::builder()
-        .default_headers(headers)
-        .build()?;
+    let users = match get_users(&dynamo_db_client).await {
+        Ok(users) => users,
+        Err(e) => return Err(e.into()),
+    };
 
-    // Make a request to the Notion API
-    let res = notion_client
-        .get("https://api.notion.com/v1/users")
-        .send()
-        .await?
-        .json::<NotionResponse>()
-        .await?;
-
-    println!("from the Notion response:\n{:#?}", res.results[1]);
-
-    match google_get_bearer_token().await {
-        Ok(bearer_token) => {
-            let mut headers = reqwest::header::HeaderMap::new();
-            headers.insert(
-                AUTHORIZATION,
-                reqwest::header::HeaderValue::from_str(
-                    &("Bearer ".to_string() + &bearer_token.as_str()),
-                )?,
-            );
-            // client for google requests
-            let google_client = reqwest::Client::builder()
-                .default_headers(headers)
-                .build()?;
-
-            // Do a request using the google token
-            let res2 = google_client
-                .get("https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=4")
-                .bearer_auth(bearer_token.as_str())
-                .send()
-                .await?
-                .json::<GoogleResponse>()
-                .await?;
-            println!("from the google response:\n{:#?}", res2.items[0]["summary"]);
-        }
-        Err(e) => println!("error: {:?}", e),
-    }
-
-    println!("asdadfafdasfd");
+    dbg!(&users);
 
     Ok(())
 }
