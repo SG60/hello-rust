@@ -3,7 +3,9 @@ use yup_oauth2::{InstalledFlowAuthenticator, InstalledFlowReturnMethod};
 
 use hello_rust::{GoogleResponse, NotionResponse};
 
+mod aws;
 mod settings;
+use aws::*;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
