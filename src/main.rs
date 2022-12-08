@@ -11,6 +11,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let settings_map = settings::get_settings()?;
     println!("{:#?}", settings_map);
 
+    match test_getting_some_stuff(settings_map).await {
+        Ok(()) => Ok(()),
+        e => e,
+    }
+}
+
+/// Old test function
+async fn test_getting_some_stuff(
+    settings_map: settings::Settings,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Default headers for notion client
     let mut headers = reqwest::header::HeaderMap::new();
     headers.insert(
@@ -65,8 +75,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Err(e) => println!("error: {:?}", e),
     }
-
-    println!("asdadfafdasfd");
 
     Ok(())
 }
