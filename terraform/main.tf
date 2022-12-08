@@ -10,10 +10,7 @@ provider "aws" {
 
 resource "aws_dynamodb_table" "user_info_table" {
   name             = "tasks"
-  arn              = "arn:aws:dynamodb:eu-west-2:636502541951:table/tasks"
-  id               = "tasks"
   billing_mode     = "PROVISIONED"
-  stream_label     = ""
   stream_view_type = ""
 
   tags = {}
