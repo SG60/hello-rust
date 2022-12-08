@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Settings {
-    pub notion_api_key: String,
 }
 
 pub fn get_settings() -> Result<Settings, ConfigError> {
