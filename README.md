@@ -27,11 +27,11 @@ https://eu-west-2.console.aws.amazon.com/dynamodbv2/home?region=eu-west-2#item-e
 
 # DB Design
 
-https://docs.rs/aws-sdk-dynamodb/latest/aws_sdk_dynamodb/
-https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GettingStarted.html
-https://github.com/awslabs/aws-sdk-rust/tree/main/examples/dynamodb
-https://docs.aws.amazon.com/sdk-for-rust/latest/dg/getting-started.html
-https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.html
+- https://docs.rs/aws-sdk-dynamodb/latest/aws_sdk_dynamodb/
+- https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/GettingStarted.html
+- https://github.com/awslabs/aws-sdk-rust/tree/main/examples/dynamodb
+- https://docs.aws.amazon.com/sdk-for-rust/latest/dg/getting-started.html
+- https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.html
 
 The DB just stores sync settings and refresh tokens.
 
