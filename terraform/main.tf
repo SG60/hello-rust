@@ -9,25 +9,28 @@ provider "aws" {
 }
 
 resource "aws_dynamodb_table" "user_info_table" {
-  name = "tasks"
-  arn = "arn:aws:dynamodb:eu-west-2:636502541951:table/tasks"
-  id = "tasks"
-  billing_mode = "PROVISIONED"
-  stream_label = ""
+  name             = "tasks"
+  arn              = "arn:aws:dynamodb:eu-west-2:636502541951:table/tasks"
+  id               = "tasks"
+  billing_mode     = "PROVISIONED"
+  stream_label     = ""
   stream_view_type = ""
-  tags = { }
-  tags_all =
-  {
+
+  tags = {}
+  tags_all {
     rust-sync = ""
   }
 
   read_capacity  = 2
   write_capacity = 2
-  hash_key       = "userId"
-  range_key      = "SK"
+
+  hash_key  = "userId"
+  range_key = "SK"
+
   stream_enabled = false
+
   point_in_time_recovery {
-    enabled: false
+    enabled = false
   }
 
   attribute {
@@ -56,11 +59,11 @@ resource "aws_dynamodb_table" "user_info_table" {
   }
 
   global_secondary_index {
-    name               = "type-data-index"
-    hash_key           = "type"
-    range_key          = "data"
-    write_capacity     = 1
-    read_capacity      = 1
-    projection_type    = "ALL"
+    name            = "type-data-index"
+    hash_key        = "type"
+    range_key       = "data"
+    write_capacity  = 1
+    read_capacity   = 1
+    projection_type = "ALL"
   }
 }
