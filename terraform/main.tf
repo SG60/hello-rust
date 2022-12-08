@@ -10,15 +10,28 @@ provider "aws" {
 
 resource "aws_dynamodb_table" "user_info_table" {
   name = "tasks"
+  arn = "arn:aws:dynamodb:eu-west-2:636502541951:table/tasks"
+  id = "tasks"
   billing_mode = "PROVISIONED"
+  stream_label = ""
+  stream_view_type = ""
+  tags = { }
+  tags_all =
+  {
+    rust-sync = ""
+  }
 
   read_capacity  = 2
   write_capacity = 2
-  hash_key       = "UserId"
+  hash_key       = "userId"
   range_key      = "SK"
+  stream_enabled = false
+  point_in_time_recovery {
+    enabled: false
+  }
 
   attribute {
-    name = "UserId"
+    name = "userId"
     type = "S"
   }
 
@@ -38,8 +51,8 @@ resource "aws_dynamodb_table" "user_info_table" {
   }
 
   ttl {
-    attribute_name = "TimeToExist"
-    enabled        = false
+    attribute_name = ""
+    enabled        = ""
   }
 
   global_secondary_index {
