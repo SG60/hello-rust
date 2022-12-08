@@ -50,11 +50,6 @@ resource "aws_dynamodb_table" "user_info_table" {
     type = "S"
   }
 
-  ttl {
-    attribute_name = ""
-    enabled        = ""
-  }
-
   global_secondary_index {
     name            = "type-data-index"
     hash_key        = "type"
