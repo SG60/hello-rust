@@ -652,13 +652,17 @@ dependencies = [
 name = "hello-rust"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "aws-config",
  "aws-sdk-dynamodb",
  "config",
  "reqwest",
  "serde",
+ "serde_dynamo",
  "serde_json",
+ "thiserror",
  "tokio",
+ "tokio-stream",
  "yup-oauth2",
 ]
 
@@ -1367,6 +1371,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "serde_dynamo"
+version = "4.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a555c2a3b2e87b2f1779850370dac299351d6860eb6cca7fe4ca5ad365433ec6"
+dependencies = [
+ "aws-sdk-dynamodb",
+ "serde",
 ]
 
 [[package]]
