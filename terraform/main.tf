@@ -17,9 +17,6 @@ resource "aws_dynamodb_table" "user_info_table" {
   stream_view_type = ""
 
   tags = {}
-  tags_all {
-    rust-sync = ""
-  }
 
   read_capacity  = 2
   write_capacity = 2
