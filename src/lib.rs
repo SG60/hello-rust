@@ -24,7 +24,7 @@ pub struct GoogleResponse {
     pub updated: String,
 }
 
-pub async fn google_get_bearer_token() -> Result<yup_oauth2::AccessToken, yup_oauth2::Error> {
+pub(crate) async fn google_get_bearer_token() -> Result<yup_oauth2::AccessToken, yup_oauth2::Error> {
     // OAuth 2 Stuff ---------------------------------------------------------------------
     // Read application secret from a file. Sometimes it's easier to compile it directly into
     // the binary. The clientsecret file contains JSON like `{"installed":{"client_id": ... }}`

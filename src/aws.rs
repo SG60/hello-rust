@@ -10,7 +10,7 @@ pub async fn load_client() -> Client {
     aws_sdk_dynamodb::Client::new(&config)
 }
 
-pub async fn get_users(client: &Client) -> Result<Vec<User>, DynamoClientError> {
+pub async fn get_users(client: &Client) -> Result<Vec<UserRecord>, DynamoClientError> {
     let paginator = client
         .query()
         .table_name("tasks")
@@ -24,17 +24,29 @@ pub async fn get_users(client: &Client) -> Result<Vec<User>, DynamoClientError> 
 
     let items = paginator.collect::<Result<Vec<_>, _>>().await?;
 
-    let users: Vec<User> = from_items(items)?;
+    let users: Vec<UserRecord> = from_items(items)?;
 
     Ok(users)
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct User {
+pub struct UserRecord {
     #[serde(rename = "userId")]
     user_id: String,
     #[serde(rename = "type")]
     record_type: String,
+    data: String,
+    #[serde(rename = "googleRefreshToken")]
+    google_refresh_token: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SyncRecord {
+    #[serde(rename = "userId")]
+    user_id: String,
+    #[serde(rename = "type")]
+    record_type: String,
+    data: String,
 }
 
 #[derive(Debug, Error)]
