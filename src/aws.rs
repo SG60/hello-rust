@@ -29,7 +29,7 @@ pub async fn get_users(client: &Client) -> Result<Vec<UserRecord>, DynamoClientE
 
     let items = paginator.collect::<Result<Vec<_>, _>>().await?;
 
-    let users: Vec<UserRecord> = from_items(items)?;
+    let users = from_items(items)?;
 
     Ok(users)
 }
@@ -56,13 +56,36 @@ struct UserRecordNotionData {
     notion_access_token: String,
 }
 
+pub async fn get_sync_records(client: &Client) -> Result<Vec<SyncRecord>, DynamoClientError> {
+    let paginator = client
+        .query()
+        .table_name("tasks")
+        .index_name("type-data-index")
+        .key_condition_expression("#t = :partKey")
+        .expression_attribute_names("#t", "type")
+        .expression_attribute_values(":partKey", AttributeValue::S("sync".to_string()))
+        .into_paginator()
+        .items()
+        .send();
+
+    let items = paginator.collect::<Result<Vec<_>, _>>().await?;
+
+    let sync_records = from_items(items)?;
+
+    Ok(sync_records)
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SyncRecord {
     #[serde(rename = "userId")]
     user_id: String,
     #[serde(rename = "type")]
     record_type: String,
+    /// includes next sync timestamp
     data: String,
+    #[serde(rename = "lastSync")]
+    last_sync: Option<String>,
+
 }
 
 #[derive(Debug, Error)]
