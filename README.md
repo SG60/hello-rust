@@ -58,7 +58,12 @@ The DB just stores sync settings and refresh tokens.
 		<tr><td>userDetails<td>ACTIVE or INACTIVE<td>notionB#bot_id	<td>asdfasefa		<td>asdfasefa		<td>workspace name, workspace emoji, etc.
 	<tr><td rowspan=2>sync#0
 		<th>type<th>data (next sync timestamp)<th>last sync<th>notionDatabase<th>googleCalendar<th colspan=3>notionDBProps
-		<tr><td>sync<td>SCHEDULED#2007-04-05T14:30Z<br>or DISABLED<br>or ERROR<td>LAST#2007-04-05T14:30Z<td>asdfase<td>asdf3<td>{"notionTitleId":{"S":"title"},"notionDoneId":{"S":"O%7CaE"}}
+		<tr><td>sync<td>SCHEDULED#2007-04-05T14:30Z<br>or DISABLED<br>or ERROR<td>LAST#2007-04-05T14:30Z<td>asdfase<td>asdf3<td>
+			
+```json
+{"notionTitleId":{"S":"title"},"notionDoneId":{"S":"O%7CaE"}}
+```
+			
 </tbody>
 </table>
 
