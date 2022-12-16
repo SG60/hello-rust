@@ -37,7 +37,7 @@ pub struct UserRecord {
     record_type: String,
     data: String,
     #[serde(rename = "googleRefreshToken")]
-    google_refresh_token: String,
+    google_refresh_token: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
