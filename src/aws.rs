@@ -10,6 +10,11 @@ pub async fn load_client() -> Client {
     aws_sdk_dynamodb::Client::new(&config)
 }
 
+/// Get all users from the DynamoDB table
+///
+/// # Errors
+///
+/// This function will return an error if the dynamo response fails.
 pub async fn get_users(client: &Client) -> Result<Vec<UserRecord>, DynamoClientError> {
     let paginator = client
         .query()
@@ -38,6 +43,17 @@ pub struct UserRecord {
     data: String,
     #[serde(rename = "googleRefreshToken")]
     google_refresh_token: Option<String>,
+    #[serde(flatten)]
+    notion_data: Option<UserRecordNotionData>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct UserRecordNotionData {
+    // `notionB#${string}`
+    #[serde(rename = "notionBotId")]
+    notion_bot_id: String,
+    #[serde(rename = "notionAccessToken")]
+    notion_access_token: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
