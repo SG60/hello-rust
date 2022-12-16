@@ -24,5 +24,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     dbg!(&sync_records);
 
+    println!("Getting one user's sync record");
+    let a_user_id = &users[0].user_id;
+    let user_sync_record = match get_sync_record(&dynamo_db_client, &a_user_id).await {
+        Ok(syncs) => syncs,
+        Err(e) => return Err(e.into()),
+    };
+
+    dbg!(&user_sync_record);
+
     Ok(())
 }

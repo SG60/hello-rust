@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use aws_sdk_dynamodb::{error::QueryError, model::AttributeValue, types::SdkError, Client};
 use serde::{Deserialize, Serialize};
@@ -37,23 +39,44 @@ pub async fn get_users(client: &Client) -> Result<Vec<UserRecord>, DynamoClientE
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserRecord {
     #[serde(rename = "userId")]
-    user_id: String,
+    pub user_id: String,
     #[serde(rename = "type")]
     record_type: String,
-    data: String,
+    pub data: String,
     #[serde(rename = "googleRefreshToken")]
-    google_refresh_token: Option<String>,
+    pub google_refresh_token: Option<String>,
     #[serde(flatten)]
-    notion_data: Option<UserRecordNotionData>,
+    pub notion_data: Option<UserRecordNotionData>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct UserRecordNotionData {
+pub struct UserRecordNotionData {
     // `notionB#${string}`
     #[serde(rename = "notionBotId")]
-    notion_bot_id: String,
+    pub notion_bot_id: String,
     #[serde(rename = "notionAccessToken")]
-    notion_access_token: String,
+    pub notion_access_token: String,
+}
+
+pub async fn get_sync_record(
+    client: &Client,
+    user_id: &str,
+) -> Result<Vec<SyncRecord>, DynamoClientError> {
+    let paginator = client
+        .query()
+        .table_name("tasks")
+        .key_condition_expression("userId = :partKey and begins_with(SK, :sk)")
+        .expression_attribute_values(":partKey", AttributeValue::S(user_id.to_string()))
+        .expression_attribute_values(":sk", AttributeValue::S("sync#".to_string()))
+        .into_paginator()
+        .items()
+        .send();
+
+    let items = paginator.collect::<Result<Vec<_>, _>>().await?;
+
+    let sync_records = from_items(items)?;
+
+    Ok(sync_records)
 }
 
 pub async fn get_sync_records(client: &Client) -> Result<Vec<SyncRecord>, DynamoClientError> {
@@ -78,14 +101,27 @@ pub async fn get_sync_records(client: &Client) -> Result<Vec<SyncRecord>, Dynamo
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SyncRecord {
     #[serde(rename = "userId")]
-    user_id: String,
+    pub user_id: String,
     #[serde(rename = "type")]
     record_type: String,
     /// includes next sync timestamp
-    data: String,
+    pub data: String,
     #[serde(rename = "lastSync")]
-    last_sync: Option<String>,
+    pub last_sync: Option<String>,
+    #[serde(rename = "notionDBProps")]
+    pub notion_db_props: NotionDBPropertyOptions,
+    #[serde(rename = "googleCalendar")]
+    pub google_calendar: String,
+    #[serde(rename = "notionDatabase")]
+    pub notion_database: String,
+}
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NotionDBPropertyOptions {
+    #[serde(rename = "notionTitleId")]
+    pub notion_title_id: String,
+    #[serde(rename = "notionDoneId")]
+    pub notion_done_id: String,
 }
 
 #[derive(Debug, Error)]
