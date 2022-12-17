@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use anyhow::Result;
 use aws_sdk_dynamodb::{error::QueryError, model::AttributeValue, types::SdkError, Client};
 use serde::{Deserialize, Serialize};
