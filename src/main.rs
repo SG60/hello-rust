@@ -2,6 +2,7 @@ mod aws;
 mod notion_api;
 mod settings;
 use aws::*;
+use hello_rust::{get_some_data_from_google_calendar, google_get_bearer_token};
 use notion_api::get_pages_from_notion_database;
 
 #[tokio::main]
@@ -48,6 +49,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     } else {
         println!("No valid user record");
     };
+
+    if let None = &one_user_record.google_refresh_token {
+        return Err("no google refresh token found".into());
+    };
+
+    let google_refresh_token = &one_user_record.google_refresh_token;
+    let google_bearer_token = match google_get_bearer_token().await {
+        Ok(token) => token,
+        Err(e) => return Err(e.into()),
+    };
+
+    dbg!(get_some_data_from_google_calendar(
+        google_bearer_token
+            .token()
+            .expect("should be a valid token")
+    )
+    .await
+    .unwrap());
 
     Ok(())
 }

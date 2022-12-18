@@ -13,8 +13,10 @@ pub struct GoogleResponse {
     pub updated: String,
 }
 
-pub(crate) async fn google_get_bearer_token() -> Result<yup_oauth2::AccessToken, yup_oauth2::Error>
-{
+// TODO: Make this function work!! Should take a refresh token
+pub async fn google_get_bearer_token() -> Result<yup_oauth2::AccessToken, yup_oauth2::Error> {
+    todo!(); // TODO: !!!
+
     // OAuth 2 Stuff ---------------------------------------------------------------------
     // Read application secret from a file. Sometimes it's easier to compile it directly into
     // the binary. The clientsecret file contains JSON like `{"installed":{"client_id": ... }}`
@@ -48,4 +50,24 @@ pub fn filter_data_by_hardcoded_user_id() {
 
     dbg!(user_id_to_use);
     todo!()
+}
+
+pub async fn get_some_data_from_google_calendar(
+    bearer_auth_token: &str,
+) -> Result<GoogleResponse, reqwest::Error> {
+    // client for google requests
+    let google_client = reqwest::Client::builder().build()?;
+
+    // Do a request using the google token
+    // TODO: make this fetch the correct calendar, rather than the primary one
+    let res = google_client
+        .get("https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=4")
+        .bearer_auth(bearer_auth_token)
+        .send()
+        .await?
+        .json::<GoogleResponse>()
+        .await?;
+    dbg!("from the google response:\n{:#?}", &res.items[0]["summary"]);
+
+    Ok(res)
 }
