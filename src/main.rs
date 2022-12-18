@@ -1,6 +1,8 @@
 mod aws;
+mod notion_api;
 mod settings;
 use aws::*;
+use notion_api::get_pages_from_notion_database;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -24,14 +26,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     dbg!(&sync_records);
 
+    let one_user_record = &users[0];
     println!("Getting one user's sync record");
-    let a_user_id = &users[0].user_id;
+    let a_user_id = &one_user_record.user_id;
     let user_sync_record = match get_sync_record(&dynamo_db_client, a_user_id).await {
         Ok(syncs) => syncs,
         Err(e) => return Err(e.into()),
     };
 
     dbg!(&user_sync_record);
+
+    if let Some(notion_data) = &one_user_record.notion_data {
+        println!("Getting items from the notion DB");
+        let database_id = &user_sync_record[0].notion_database;
+        dbg!(database_id);
+        dbg!(&notion_data.notion_access_token);
+        let notion_events =
+            get_pages_from_notion_database(&notion_data.notion_access_token, &database_id).await;
+
+        dbg!(&notion_events.unwrap().results[0]);
+    } else {
+        println!("No valid user record");
+    };
 
     Ok(())
 }
