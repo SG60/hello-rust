@@ -1,3 +1,4 @@
+---
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
@@ -8,3 +9,22 @@ spec:
   type: other
   lifecycle: unknown
   owner: main
+  system: notion-sync
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: notion-sync
+spec:
+  owner: main
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: tasks-db
+  description: Stores data for notion gcal sync (DynamoDB)
+spec:
+  type: database
+  owner: main
+  system: notion-sync
+---
