@@ -2,7 +2,7 @@
 apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
-  name: hello-rust
+  name: hello-rust-backend
   annotations:
     github.com/project-slug: SG60/hello-rust
 spec:
@@ -10,6 +10,7 @@ spec:
   lifecycle: unknown
   owner: main
   system: notion-sync
+  dependsOn: resource:tasks-db
 ---
 apiVersion: backstage.io/v1alpha1
 kind: System
