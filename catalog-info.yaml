@@ -10,7 +10,8 @@ spec:
   lifecycle: unknown
   owner: main
   system: notion-sync
-  dependsOn: resource:tasks-db
+  dependsOn:
+    - resource:tasks-db
 ---
 apiVersion: backstage.io/v1alpha1
 kind: System
