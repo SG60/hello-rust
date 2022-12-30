@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Settings {
+    pub google_oauth_client_id: String,
+    pub google_oauth_client_secret: String,
 }
 
 pub fn get_settings() -> Result<Settings, ConfigError> {
