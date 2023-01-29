@@ -88,4 +88,6 @@ https://web.postman.co/workspace/fe759fe4-0286-4679-860f-6dc84d8af0fc
 
 # k8s infra
 
+Deployed to Oracle kubernetes cluster.
+
 https://github.com/SG60/hello-rust-infrastructure-config
