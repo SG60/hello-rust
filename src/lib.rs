@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use yup_oauth2::InstalledFlowAuthenticator;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GoogleResponse {
@@ -22,14 +21,14 @@ pub struct GoogleToken {
 #[derive(Debug)]
 pub struct GoogleAccessToken {
     pub access_token: String,
-    pub expiry_time: (), // TODO: what type should this be?
+    pub expiry_time: std::time::SystemTime,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct GoogleRefreshTokenRequestResponse {
     access_token: String, // e.g. "1/fFAasGRNJTz70BzhT3Zg"
     /// in seconds
-    expires_in: u16, // e.g. 3920
+    expires_in: u64, // e.g. 3920
     scope: String,        // e.g. "https://www.googleapis.com/auth/drive.metadata.readonly"
     token_type: String,   // always "Bearer"
 }
@@ -51,10 +50,10 @@ impl GoogleToken {
     ///
     /// TODO: return something different for some of these errors
     pub async fn refresh_token(
-        self,
+        &mut self,
         google_oauth_client_id: &str,
         google_oauth_client_secret: &str,
-    ) -> Result<Self, reqwest::Error> {
+    ) -> Result<&Self, reqwest::Error> {
         // POST /token HTTP/1.1
         // Host: oauth2.googleapis.com
         // Content-Type: application/x-www-form-urlencoded
@@ -79,29 +78,46 @@ impl GoogleToken {
 
         let response_json = response_json?.await?;
 
-        Ok(Self {
-            access_token: Some(GoogleAccessToken {
-                access_token: response_json.access_token,
-                expiry_time: (), /* TODO: this needs some calculations?! */
-            }),
-            refresh_token: self.refresh_token,
-        })
+        let expires_in = std::time::Duration::from_secs(response_json.expires_in); // TODO: expiry time
+        let expiry_time = std::time::SystemTime::now() + expires_in;
+
+        self.access_token = Some(GoogleAccessToken {
+            access_token: response_json.access_token,
+            expiry_time,
+        });
+
+        Ok(self)
     }
 
-    pub async fn get(mut self) -> &str {
+    pub async fn get(
+        &mut self,
+        google_oauth_client_id: &str,
+        google_oauth_client_secret: &str,
+    ) -> String {
         let mut expired = false;
-        if let Some(access_token) = self.access_token {
-            if access_token.expiry_time == () {
+        if let Some(ref access_token) = self.access_token {
+            if access_token.expiry_time <= std::time::SystemTime::now() {
                 expired = true
             }
         } else {
             expired = true
         };
 
-        match expired {
-            true => "should refresh token",
-            false => &self.access_token.unwrap().access_token,
-        }
+        let refresh_response = if expired {
+            println!("Refreshing Google Calendar user access token");
+            Some(
+                self.refresh_token(google_oauth_client_id, google_oauth_client_secret)
+                    .await,
+            )
+        } else {
+            None
+        };
+
+        self.access_token
+            .as_ref()
+            .expect("Access token should exist")
+            .access_token
+            .to_owned()
     }
 }
 

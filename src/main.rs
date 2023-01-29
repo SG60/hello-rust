@@ -20,6 +20,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     dbg!(&users);
 
+    // All the sync records from dynamodb
     let sync_records = match get_sync_records(&dynamo_db_client).await {
         Ok(syncs) => syncs,
         Err(e) => return Err(e.into()),
@@ -45,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let notion_events =
             get_pages_from_notion_database(&notion_data.notion_access_token, &database_id).await;
 
-        dbg!(&notion_events.unwrap().results[0]);
+        // dbg!(&notion_events.unwrap().results[0]);
     } else {
         println!("No valid user record");
     };
