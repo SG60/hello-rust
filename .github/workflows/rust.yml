@@ -2,9 +2,9 @@ name: Rust
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
     types: [opened, reopened, ready_for_review, synchronize]
   workflow_dispatch:
 
@@ -21,18 +21,124 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ !github.event.pull_request.draft }}
     steps:
-    - uses: actions/checkout@v3
-    - uses: Swatinem/rust-cache@v2
-    - uses: rui314/setup-mold@v1
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
-  
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
+      - uses: rui314/setup-mold@v1
+      - name: Build
+        run: cargo build --verbose
+      - name: Run tests
+        run: cargo test --verbose
+
   clippy:
     runs-on: ubuntu-latest
     if: ${{ !github.event.pull_request.draft }}
     steps:
-    - uses: actions/checkout@v3
-    - uses: Swatinem/rust-cache@v2
-    - run: cargo clippy
+      - uses: actions/checkout@v3
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy
+
+  build:
+    # runs-on: [self-hosted, linux, ARM64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      # - name: Install Arm C/C++ compiler
+      #   run: sudo apt install -y g++-aarch64-linux-gnu
+      # selecting a toolchain either by action or manual `rustup` calls should happen
+      # before the plugin, as the cache uses the current rustc version as its cache key
+      # - run: rustup target add aarch64-unknown-linux-gnu
+
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo install cross
+
+      - uses: rui314/setup-mold@v1
+      - name: Build
+        run: |
+          cross build --target=aarch64-unknown-linux-gnu --verbose
+
+      - name: Set up Docker Context for Buildx
+        id: buildx-context
+        run: |
+          docker context create builders
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          version: v0.9.1
+          endpoint: builders
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          registry: lhr.ocir.io
+          username: ${{ secrets.OCIR_USERNAME }}
+          password: ${{ secrets.OCIR_TOKEN }}
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            lhr.ocir.io/lrdyqp2xtoja/hello-rust-backend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build Dockerfile
+        id: build-and-push-action-1
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          load: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=local,dest=buildkit-docker-cache-location
+          platforms: linux/arm64
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.meta.outputs.tags }}
+          format: "table"
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+
+      - name: Push
+        id: build-and-push-action
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=local,src=buildkit-docker-cache-location
+          cache-to: type=gha
+          platforms: linux/arm64
+
+      # TODO!
+      # - name: install kustomize
+      #   run: |
+      #     curl -sfLo kustomize.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv4.5.7/kustomize_v4.5.7_linux_arm64.tar.gz
+      #     tar xzf ./kustomize.tar.gz
+      #
+      # - name: Update kustomization for new image
+      #   run: |
+      #     echo Image Digest: ${{ steps.build-and-push-action.outputs.digest }}
+      #     cd kubernetes
+      #     ../kustomize edit set image lhr.ocir.io/lrdyqp2xtoja/hello-rust-backend@${{ steps.build-and-push-action.outputs.digest }}
+      #
+      # - name: Commit to git
+      #   run: |
+      #     git config user.name github-actions
+      #     git config user.email github-actions@github.com
+      #     git add kubernetes/kustomization.yaml
+      #     git commit -m "update docker image digest"
+      #     git push
