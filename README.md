@@ -85,3 +85,7 @@ https://www.notion.so/my-integrations/public/f8014299c7f64cac8315d858c2aab2c8
 # Postman Workspace
 
 https://web.postman.co/workspace/fe759fe4-0286-4679-860f-6dc84d8af0fc
+
+# k8s infra
+
+https://github.com/SG60/hello-rust-infrastructure-config
