@@ -3,12 +3,13 @@ name = "hello-rust"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
+default-run = "hello-rust"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 reqwest = { version = "0.11", features = ["json", "native-tls-vendored"] }
-tokio = { version = "1", features = ["rt-multi-thread"] }
+tokio = { version = "1", features = ["rt-multi-thread", "time", "signal"] }
 tokio-stream = "0.1.11"
 serde = { version = "1.0.148", features = ["derive"] }
 serde_json = "1.0.89"

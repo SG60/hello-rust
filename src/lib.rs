@@ -1,5 +1,9 @@
 use serde::{Deserialize, Serialize};
 
+pub mod notion_api;
+pub mod settings;
+pub mod aws;
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GoogleResponse {
     pub items: Vec<serde_json::Value>,
