@@ -138,16 +138,17 @@ jobs:
           token: ${{ secrets.WRITE_INFRASTRUCTURE_REPOSITORY_PAT }}
 
       - name: install kustomize
+        id: kustomize-installation
         run: |
           curl -sfLo kustomize.tar.gz https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv4.5.7/kustomize_v4.5.7_linux_amd64.tar.gz
           tar xzf ./kustomize.tar.gz
+          echo "KUSTOMIZE_COMMAND=$PWD/kustomize" >> $GITHUB_OUTPUT
 
       - name: Update kustomization for new image
         # in 'prod' folder
         run: |
-          echo Image Digest: ${{ needs.build.outputs.docker-image-published-digest }}
           cd k8s/prod
-          ../kustomize edit set image lhr.ocir.io/lrdyqp2xtoja/hello-rust-backend@${{ needs.build.outputs.docker-image-published-digest }}
+          ${{ steps.kustomize-installation.outputs.KUSTOMIZE_COMMAND }} edit set image lhr.ocir.io/lrdyqp2xtoja/hello-rust-backend@${{ needs.build.outputs.docker-image-published-digest }}
 
       - name: Commit to git
         run: |
