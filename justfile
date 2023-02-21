@@ -1,4 +1,5 @@
 # just manual: https://github.com/casey/just/blob/master/README.md
+set dotenv-load
 
 list:
     just --list
@@ -11,3 +12,12 @@ fun:
 
 lint:
     cargo clippy
+
+watch +COMMAND='test':
+    cargo watch --clear --exec "{{COMMAND}}"
+
+test:
+  cargo test
+
+test-stdout:
+  cargo test -- --show-output
