@@ -16,8 +16,11 @@ lint:
 watch +COMMAND='test':
     cargo watch --clear --exec "{{COMMAND}}"
 
-test:
-  cargo test
+test *FLAGS:
+  cargo test -- {{FLAGS}}
 
-test-stdout:
-  cargo test -- --show-output
+test-stdout *FLAGS:
+  just test --show-output {{FLAGS}}
+
+test-all *FLAGS:
+  just test --include-ignored {{FLAGS}}

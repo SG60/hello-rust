@@ -3,6 +3,7 @@ use hello_rust::settings;
 use hello_rust::GoogleToken;
 
 #[tokio::test]
+#[ignore]
 async fn test_google_oauth_token_refresh() -> Result<(), Box<dyn std::error::Error>> {
     // Env vars! -----------------------------------
     let settings_map = settings::get_settings();
