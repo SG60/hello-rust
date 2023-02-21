@@ -13,7 +13,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tx, mut rx) = watch::channel(());
 
     // Env vars! -----------------------------------
-    let settings_map = settings::get_settings();
+    let mut retry_wait_seconds = 1;
+    let settings_map = loop {
+        let settings_map = settings::get_settings();
+        match settings_map {
+            Err(error) => {
+                println!("Error obtaining settings");
+                println!("{:#?}", error);
+                tokio::time::sleep(Duration::from_secs(retry_wait_seconds)).await;
+                if retry_wait_seconds < 300 {
+                    retry_wait_seconds += retry_wait_seconds
+                };
+            }
+            Ok(settings_map) => break settings_map,
+        }
+    };
+    println!("Settings successfully obtained.");
     println!("{:#?}", settings_map);
 
     async fn some_operation(message: &str, duration: Duration, receiver: watch::Receiver<()>) {
