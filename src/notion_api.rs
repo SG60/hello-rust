@@ -52,7 +52,7 @@ impl NotionReqwest for reqwest::ClientBuilder {
         Ok(self.default_headers(headers))
     }
 }
-pub fn make_notion_client(authorisation_token: &str) -> reqwest::Client {
+pub fn _make_notion_client(authorisation_token: &str) -> reqwest::Client {
     // client for notion requests
     reqwest::Client::builder()
         .add_notion_headers(authorisation_token)
@@ -60,12 +60,12 @@ pub fn make_notion_client(authorisation_token: &str) -> reqwest::Client {
         .build()
         .expect("this should work")
 }
-pub async fn get_pages_from_notion_database(
+pub async fn _get_pages_from_notion_database(
     authorisation_token: &str,
     database_id: &str,
 ) -> Result<NotionPagesResponse, reqwest::Error> {
     // client for notion requests
-    let notion_client = make_notion_client(authorisation_token);
+    let notion_client = _make_notion_client(authorisation_token);
 
     notion_client
         .post("https://api.notion.com/v1/databases/".to_owned() + database_id + "/query")

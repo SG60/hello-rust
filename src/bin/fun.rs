@@ -1,5 +1,5 @@
 use hello_rust::aws::*;
-use hello_rust::notion_api::get_pages_from_notion_database;
+use hello_rust::notion_api::_get_pages_from_notion_database;
 use hello_rust::settings;
 use hello_rust::{get_some_data_from_google_calendar, GoogleToken};
 
@@ -41,8 +41,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let database_id = &user_sync_record[0].notion_database;
         dbg!(database_id);
         dbg!(&notion_data.notion_access_token);
-        let notion_events =
-            get_pages_from_notion_database(&notion_data.notion_access_token, &database_id).await;
+        let _notion_events =
+            _get_pages_from_notion_database(&notion_data.notion_access_token, database_id).await;
 
         // dbg!(&notion_events.unwrap().results[0]);
     } else {
@@ -58,8 +58,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await
             .unwrap());
 
-        return Ok(());
+        Ok(())
     } else {
-        return Err("no google refresh token found".into());
+        Err("no google refresh token found".into())
     }
 }

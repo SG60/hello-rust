@@ -1,6 +1,5 @@
 use std::time::Duration;
 use tokio::signal;
-use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::watch;
 
 mod aws;
@@ -10,7 +9,7 @@ mod settings;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let (send, mut recv): (Sender<()>, _) = channel(1);
-    let (tx, mut rx) = watch::channel(());
+    let (tx, rx) = watch::channel(());
 
     // Env vars! -----------------------------------
     let mut retry_wait_seconds = 1;

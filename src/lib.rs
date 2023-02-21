@@ -78,7 +78,7 @@ impl GoogleToken {
             .form(&params)
             .send()
             .await
-            .and_then(|response| Ok(response.json::<GoogleRefreshTokenRequestResponse>()));
+            .map(|response| response.json::<GoogleRefreshTokenRequestResponse>());
 
         let response_json = response_json?.await?;
 
@@ -107,7 +107,7 @@ impl GoogleToken {
             expired = true
         };
 
-        let refresh_response = if expired {
+        let _refresh_response = if expired {
             println!("Refreshing Google Calendar user access token");
             Some(
                 self.refresh_token(google_oauth_client_id, google_oauth_client_secret)
