@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
+pub mod aws;
 pub mod notion_api;
 pub mod settings;
-pub mod aws;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GoogleResponse {
@@ -125,13 +125,16 @@ impl GoogleToken {
     }
 }
 
-/// TEMPORARY!
-pub fn filter_data_by_hardcoded_user_id() {
+/// TEMPORARY!?! Useful for testing though.
+pub fn filter_data_by_hardcoded_user_id(users: &[aws::UserRecord]) -> Option<&aws::UserRecord> {
     // TEMPORARY! This is a hardcoded user_id string
-    let user_id_to_use: &str = "e2TPa0rcNbgDSmPXDA8CtHlOjUN2";
+    let user_id_to_use = "e2TPa0rcNbgDSmPXDA8CtHlOjUN2".to_string();
 
-    dbg!(user_id_to_use);
-    todo!()
+    let filtered_user = users
+        .iter()
+        .find(|element| element.user_id == user_id_to_use);
+
+    filtered_user
 }
 
 pub async fn get_some_data_from_google_calendar(
@@ -152,4 +155,15 @@ pub async fn get_some_data_from_google_calendar(
     dbg!("from the google response:\n{:#?}", &res.items[0]["summary"]);
 
     Ok(res)
+}
+
+#[cfg(test)]
+mod tests {
+    // use super::*;
+
+    #[test]
+    fn fake_test() {
+        let result = 2 + 2;
+        assert_eq!(result, 4);
+    }
 }
