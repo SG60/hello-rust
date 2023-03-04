@@ -20,3 +20,6 @@ aws-config = "0.51.0"
 aws-sdk-dynamodb = "0.21.0"
 thiserror = "1.0.37"
 anyhow = "1.0.68"
+# https://github.com/1Password/typeshare
+# sharing types with frontend
+typeshare = "1.0.1"

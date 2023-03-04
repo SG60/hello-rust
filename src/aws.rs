@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_dynamo::from_items;
 use thiserror::Error;
 use tokio_stream::StreamExt;
+use typeshare::typeshare;
 
 pub async fn load_client() -> Client {
     let config = aws_config::load_from_env().await;
@@ -34,6 +35,7 @@ pub async fn get_users(client: &Client) -> Result<Vec<UserRecord>, DynamoClientE
     Ok(users)
 }
 
+#[typeshare]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UserRecord {
     #[serde(rename = "userId")]
@@ -96,6 +98,7 @@ pub async fn get_sync_records(client: &Client) -> Result<Vec<SyncRecord>, Dynamo
     Ok(sync_records)
 }
 
+#[typeshare]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SyncRecord {
     #[serde(rename = "userId")]
