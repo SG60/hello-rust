@@ -14,7 +14,7 @@ https://eu-west-2.console.aws.amazon.com/dynamodbv2/home?region=eu-west-2#item-e
 
 </details>
 
-[![Rust](https://github.com/SG60/hello-rust/actions/workflows/rust.yml/badge.svg)](https://github.com/SG60/hello-rust/actions/workflows/rust.yml)
+[![Rust](https://github.com/SG60/hello-rust/actions/workflows/rust.yml/badge.svg)](https://github.com/SG60/hello-rust/actions/workflows/rust.yml) [![App Status](https://argocd.herd.samgreening.com/api/badge?name=hello-rust-notion-sync&revision=true)](https://argocd.herd.samgreening.com/applications/hello-rust-notion-sync)
 
 [Terraform Cloud for deploying changes to DynamoDB](https://app.terraform.io/app/samgreening/workspaces/notion_sync)
 
