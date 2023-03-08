@@ -6,12 +6,13 @@ metadata:
   annotations:
     github.com/project-slug: SG60/hello-rust
 spec:
-  type: other
-  lifecycle: unknown
+  type: service
+  lifecycle: dev
   owner: main
   system: notion-sync
   dependsOn:
     - resource:tasks-db
+    - resource:oracle-k8s
 ---
 apiVersion: backstage.io/v1alpha1
 kind: System
