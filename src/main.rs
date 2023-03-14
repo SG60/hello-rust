@@ -91,6 +91,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // will return with an error. We ignore the error.
     // let _ = recv.recv().await;
 
+    // Shutdown trace pipeline
+    opentelemetry::global::shutdown_tracer_provider();
+
     println!("Tasks complete.");
 
     Ok(())
