@@ -22,6 +22,10 @@ jobs:
     if: ${{ !github.event.pull_request.draft }}
     steps:
       - uses: actions/checkout@v3
+      - name: Install protoc compiler (required by tonic, used by otel exporter)
+        run: |
+          sudo apt-get update
+          sudo apt install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@v2
       - uses: rui314/setup-mold@v1
       - name: Run tests
@@ -32,6 +36,10 @@ jobs:
     if: ${{ !github.event.pull_request.draft }}
     steps:
       - uses: actions/checkout@v3
+      - name: Install protoc compiler (required by tonic, used by otel exporter)
+        run: |
+          sudo apt-get update
+          sudo apt install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@v2
       - run: cargo clippy
 

@@ -18,8 +18,26 @@ config = { version = "0.13.3", features = [] }
 yup-oauth2 = "8.1.0"
 aws-config = "0.51.0"
 aws-sdk-dynamodb = "0.21.0"
-thiserror = "1.0.37"
 # https://github.com/1Password/typeshare
 # sharing types with frontend
 typeshare = "1.0.1"
+
+# error types
+thiserror = "1.0.37"
 anyhow = "1.0.69"
+
+# tokio tracing crate
+tracing = "0.1.37"
+# Implements the types defined in the Otel spec
+# "rt-tokio-current-thread" required for batch exports of spans
+opentelemetry = { version = "0.18.0", features = ["rt-tokio-current-thread"] }
+# Integration between the tracing crate and the opentelemetry crate
+tracing-opentelemetry = "0.18.0"
+# Allows you to export data to OTEL collector
+# Requires protoc to be installed (protobuf compiler)
+opentelemetry-otlp = "0.11.0"
+tracing-subscriber = "0.3.16"
+
+[package.metadata.cross.target.aarch64-unknown-linux-gnu]
+# install protoc protobuf compiler in cross docker image
+dockerfile = "./CrossDockerfile"
