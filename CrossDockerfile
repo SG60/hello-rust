@@ -2,6 +2,6 @@ ARG CROSS_BASE_IMAGE
 FROM $CROSS_BASE_IMAGE
 
 RUN curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-aarch_64.zip && \
-    unzip protoc-*-linux-aarch_64.zip -d protoc && \
+    unzip protoc-21.12-linux-aarch_64.zip -d protoc && \
     mv ./protoc/bin/protoc /bin && \
-    rm -rf protoc protoc-*-linux-aarch_64.zip
+    rm -rf protoc protoc-21.12-linux-aarch_64.zip
