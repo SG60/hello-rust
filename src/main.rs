@@ -105,7 +105,12 @@ fn set_up_logging() -> Result<()> {
         .tracing()
         // with_env() gets OTEL endpoint from the env var OTEL_EXPORTER_OTLP_ENDPOINT
         // (if it is available)
-        .with_exporter(opentelemetry_otlp::new_exporter().tonic().with_env())
+        .with_exporter(
+            opentelemetry_otlp::new_exporter()
+                .tonic()
+                .with_env()
+                .with_endpoint("http://otel-1-collector.telemetry.svc.cluster.local:4317"),
+        )
         .install_batch(opentelemetry::runtime::TokioCurrentThread)?;
 
     // Create a tracing layer with the configured tracer
