@@ -41,5 +41,5 @@ tracing-subscriber = "0.3.16"
 [package.metadata.cross.target.aarch64-unknown-linux-gnu]
 # install protoc protobuf compiler in cross docker image
 pre-build = [
-  "apt-get update && apt-get install --assume-yes protobuf-compiler libprotobuf-dev",
+  "curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-aarch_64.zip && unzip protoc-*-linux-aarch_64.zip -d protoc && mv protoc/bin/protoc /bin && rm -rf protoc protoc-*-linux-aarch_64.zip",
 ]
