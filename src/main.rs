@@ -106,6 +106,13 @@ fn set_up_logging() -> Result<()> {
         // with_env() gets OTEL endpoint from the env var OTEL_EXPORTER_OTLP_ENDPOINT
         // (if it is available)
         .with_exporter(opentelemetry_otlp::new_exporter().tonic().with_env())
+        // config, service.name etc.
+        .with_trace_config(opentelemetry::sdk::trace::config().with_resource(
+            opentelemetry::sdk::Resource::new(vec![opentelemetry::KeyValue::new(
+                "service.name",
+                "hello-rust-backend",
+            )]),
+        ))
         .install_batch(opentelemetry::runtime::TokioCurrentThread)?;
 
     // Create a tracing layer with the configured tracer
