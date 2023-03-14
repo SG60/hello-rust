@@ -43,7 +43,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let span = span!(Level::TRACE, "message span");
             let _enter = span.enter();
-            println!("{}", message);
             event!(Level::INFO, message);
 
             if receiver.has_changed().unwrap_or(true) {
