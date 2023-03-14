@@ -1,8 +1,11 @@
 ARG CROSS_BASE_IMAGE
+ARG CROSS_DEB_ARCH
 FROM $CROSS_BASE_IMAGE
 
-RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-aarch_64.zip
-#&& \
-#    unzip protoc-21.12-linux-aarch_64.zip -d protoc && \
-#    mv ./protoc/bin/protoc /bin && \
-#    rm -rf protoc protoc-21.12-linux-aarch_64.zip
+RUN dpkg --add-architecture $CROSS_DEB_ARCH
+RUN apt-get update && apt-get install --assume-yes curl:$CROSS_DEB_ARCH
+
+RUN curl https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-aarch_64.zip && \
+    unzip protoc-21.12-linux-aarch_64.zip -d protoc && \
+    mv ./protoc/bin/protoc /bin && \
+    rm -rf protoc protoc-21.12-linux-aarch_64.zip
