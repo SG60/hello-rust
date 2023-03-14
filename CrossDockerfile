@@ -5,7 +5,7 @@ FROM $CROSS_BASE_IMAGE
 RUN apt-get update && apt-get install --assume-yes curl unzip
 #:arm64
 
-RUN curl https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-aarch_64.zip && \
-    unzip protoc-21.12-linux-aarch_64.zip -d protoc && \
-    mv ./protoc/bin/protoc /bin && \
-    rm -rf protoc protoc-21.12-linux-aarch_64.zip
+RUN curl https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-aarch_64.zip
+RUN unzip protoc-21.12-linux-aarch_64.zip -d protoc
+RUN mv ./protoc/bin/protoc /bin
+RUN rm -rf protoc protoc-21.12-linux-aarch_64.zip
