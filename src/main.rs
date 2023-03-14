@@ -1,6 +1,10 @@
+use anyhow::Result;
 use std::time::Duration;
 use tokio::signal;
 use tokio::sync::watch;
+use tracing::{event, Level};
+
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 mod aws;
 mod notion_api;
@@ -8,6 +12,8 @@ mod settings;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    set_up_logging()?;
+
     // let (send, mut recv): (Sender<()>, _) = channel(1);
     let (tx, rx) = watch::channel(());
 
@@ -30,10 +36,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Settings successfully obtained.");
     println!("{:#?}", settings_map);
 
+    #[tracing::instrument]
     async fn some_operation(message: &str, duration: Duration, receiver: watch::Receiver<()>) {
         loop {
             tokio::time::sleep(duration).await;
             println!("{}", message);
+            event!(Level::INFO, message);
             if receiver.has_changed().unwrap_or(true) {
                 break;
             };
@@ -80,6 +88,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let _ = recv.recv().await;
 
     println!("Tasks complete.");
+
+    Ok(())
+}
+
+fn set_up_logging() -> Result<()> {
+    // Install a new OpenTelemetry trace pipeline
+    let tracer = opentelemetry_otlp::new_pipeline()
+        .tracing()
+        .with_exporter(opentelemetry_otlp::new_exporter().tonic())
+        .install_batch(opentelemetry::runtime::TokioCurrentThread)?;
+
+    // Create a tracing layer with the configured tracer
+    let opentelemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+
+    // The SubscriberExt and SubscriberInitExt traits are needed to extend the
+    // Registry to accept `opentelemetry (the OpenTelemetryLayer type).
+    tracing_subscriber::registry()
+        .with(opentelemetry)
+        // Continue logging to stdout as well
+        .with(fmt::Layer::default())
+        .try_init()?;
 
     Ok(())
 }

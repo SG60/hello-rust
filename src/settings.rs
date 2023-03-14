@@ -7,6 +7,7 @@ pub struct Settings {
     pub google_oauth_client_secret: String,
 }
 
+#[tracing::instrument]
 pub fn get_settings() -> Result<Settings, ConfigError> {
     // Env vars! -----------------------------------
     let settings = Config::builder()
