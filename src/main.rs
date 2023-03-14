@@ -37,7 +37,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Settings successfully obtained.");
     println!("{:#?}", settings_map);
 
-    #[tracing::instrument]
     async fn some_operation(message: &str, duration: Duration, receiver: watch::Receiver<()>) {
         loop {
             tokio::time::sleep(duration).await;
