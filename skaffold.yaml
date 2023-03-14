@@ -1,0 +1,37 @@
+apiVersion: skaffold/v4beta2
+kind: Config
+
+build:
+  platforms:
+    - linux/arm64
+
+  artifacts:
+    - image: lhr.ocir.io/lrdyqp2xtoja/hello-rust-backend
+      custom:
+        dependencies:
+          paths:
+            - src
+            - Cargo.toml
+        buildCommand: |
+          set -x      # show the command-line
+          just build-arm64
+
+          docker build --platform $PLATFORMS --tag=$IMAGE .
+
+          set +x
+
+          if [[ "${PUSH_IMAGE}" == "true" ]]; then
+              echo "Pushing $IMAGE"
+              docker push "$IMAGE"
+          else
+              echo "Not pushing $IMAGE"
+          fi
+
+manifests:
+  kustomize:
+    paths:
+      - ../hello-rust-infrastructure-config/k8s/dev
+
+deploy:
+  kubectl:
+    defaultNamespace: dev-ns-hello-rust-notion-sync
