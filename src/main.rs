@@ -5,7 +5,7 @@ use tokio::signal;
 use tokio::sync::watch;
 use tracing::{event, span, Level};
 
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 mod aws;
 mod notion_api;
@@ -116,7 +116,13 @@ fn set_up_logging() -> Result<()> {
         .install_batch(opentelemetry::runtime::TokioCurrentThread)?;
 
     // Create a tracing layer with the configured tracer
-    let opentelemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+    let opentelemetry = tracing_opentelemetry::layer()
+        .with_tracer(tracer)
+        // Add a filter to the OTEL layer so that it only observes
+        // the spans that I want
+        .with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
+            metadata.target() == "hello_rust"
+        }));
 
     // The SubscriberExt and SubscriberInitExt traits are needed to extend the
     // Registry to accept `opentelemetry (the OpenTelemetryLayer type).
