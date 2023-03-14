@@ -55,11 +55,6 @@ jobs:
       # before the plugin, as the cache uses the current rustc version as its cache key
       # - run: rustup target add aarch64-unknown-linux-gnu
 
-      - name: Install protoc compiler (required by tonic, used by otel exporter)
-        run: |
-          sudo apt-get update
-          sudo apt install -y protobuf-compiler libprotobuf-dev
-
       - uses: Swatinem/rust-cache@v2
       - run: cargo install cross
 
