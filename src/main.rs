@@ -1,4 +1,5 @@
 use anyhow::Result;
+use opentelemetry_otlp::WithExportConfig;
 use std::time::Duration;
 use tokio::signal;
 use tokio::sync::watch;
@@ -96,7 +97,9 @@ fn set_up_logging() -> Result<()> {
     // Install a new OpenTelemetry trace pipeline
     let tracer = opentelemetry_otlp::new_pipeline()
         .tracing()
-        .with_exporter(opentelemetry_otlp::new_exporter().tonic())
+        // with_env() gets OTEL endpoint from the env var OTEL_EXPORTER_OTLP_ENDPOINT
+        // (if it is available)
+        .with_exporter(opentelemetry_otlp::new_exporter().tonic().with_env())
         .install_batch(opentelemetry::runtime::TokioCurrentThread)?;
 
     // Create a tracing layer with the configured tracer
