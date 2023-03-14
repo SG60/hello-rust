@@ -58,7 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let _op1 = tokio::spawn(some_operation(
         "Hello World!",
-        Duration::from_secs(3),
+        Duration::from_secs(10),
         rx.clone(),
     ));
 
