@@ -1,7 +1,8 @@
 ARG CROSS_BASE_IMAGE
 FROM $CROSS_BASE_IMAGE
 
-RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-aarch_64.zip && \
-    unzip protoc-21.12-linux-aarch_64.zip -d protoc && \
-    mv ./protoc/bin/protoc /bin && \
-    rm -rf protoc protoc-21.12-linux-aarch_64.zip
+RUN wget https://github.com/protocolbuffers/protobuf/releases/download/v21.12/protoc-21.12-linux-aarch_64.zip
+#&& \
+#    unzip protoc-21.12-linux-aarch_64.zip -d protoc && \
+#    mv ./protoc/bin/protoc /bin && \
+#    rm -rf protoc protoc-21.12-linux-aarch_64.zip
