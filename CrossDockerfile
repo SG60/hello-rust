@@ -1,4 +1,4 @@
-ARG CROSS_DEB_ARCH
+ARG CROSS_BASE_IMAGE
 FROM $CROSS_BASE_IMAGE
 
 #RUN dpkg --add-architecture arm64
