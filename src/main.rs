@@ -3,7 +3,7 @@ use opentelemetry_otlp::WithExportConfig;
 use std::time::Duration;
 use tokio::signal;
 use tokio::sync::watch;
-use tracing::{event, Level};
+use tracing::{event, span, Level};
 
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -41,8 +41,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     async fn some_operation(message: &str, duration: Duration, receiver: watch::Receiver<()>) {
         loop {
             tokio::time::sleep(duration).await;
+
+            let span = span!(Level::TRACE, "message span");
+            let _enter = span.enter();
             println!("{}", message);
             event!(Level::INFO, message);
+
             if receiver.has_changed().unwrap_or(true) {
                 break;
             };
