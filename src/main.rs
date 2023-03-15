@@ -126,7 +126,7 @@ fn set_up_logging() -> Result<()> {
         // the spans that I want
         .with_filter(tracing_filter.clone());
 
-    let fmt_layer = fmt::Layer::default().with_filter(tracing_filter);
+    let fmt_layer = fmt::Layer::default().json().with_filter(tracing_filter);
 
     // The SubscriberExt and SubscriberInitExt traits are needed to extend the
     // Registry to accept `opentelemetry (the OpenTelemetryLayer type).
