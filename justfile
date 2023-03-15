@@ -1,6 +1,9 @@
 # just manual: https://github.com/casey/just/blob/master/README.md
 set dotenv-load
 
+default:
+  @just --choose
+
 list:
     just --list
 
@@ -31,3 +34,17 @@ test-all *FLAGS:
 # build for arm64
 build-arm64:
   cross build --target=aarch64-unknown-linux-gnu --release
+
+run-with-jaeger:
+  #!/bin/bash
+  set -ux
+  trap '' INT
+  run_commands () (
+     trap - INT
+     echo 'starting jaeger'
+     docker run -d --name jaeger -p 4317:4317 -p 16686:16686 -e COLLECTOR_OTLP_ENABLED=true jaegertracing/all-in-one:latest
+     echo 'just run'
+     just run
+  )
+  run_commands
+  docker stop jaeger; docker rm -v jaeger
