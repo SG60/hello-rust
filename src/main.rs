@@ -3,14 +3,18 @@ use std::time::Duration;
 use tokio::signal;
 use tokio::sync::watch;
 
+// tracing
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_semantic_conventions as semcov;
 use tracing::{event, span, Level};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
+use trace_output_fmt::JsonWithTraceId;
+
 mod aws;
 mod notion_api;
 mod settings;
+mod trace_output_fmt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -116,7 +120,7 @@ fn set_up_logging() -> Result<()> {
         .install_batch(opentelemetry::runtime::TokioCurrentThread)?;
 
     let tracing_filter = tracing_subscriber::filter::filter_fn(|metadata| {
-        metadata.target() == env!("CARGO_PKG_NAME").replace("-", "_")
+        metadata.target() == env!("CARGO_PKG_NAME").replace('-', "_")
     });
 
     // Create a tracing layer with the configured tracer
@@ -126,15 +130,28 @@ fn set_up_logging() -> Result<()> {
         // the spans that I want
         .with_filter(tracing_filter.clone());
 
-    let fmt_layer = fmt::Layer::default().json().with_filter(tracing_filter);
+    let fmt_layer = fmt::Layer::default()
+        .json()
+        .event_format(JsonWithTraceId)
+        .with_filter(tracing_filter.clone());
 
     // The SubscriberExt and SubscriberInitExt traits are needed to extend the
     // Registry to accept `opentelemetry (the OpenTelemetryLayer type).
-    tracing_subscriber::registry()
+    let tracing_subscriber_registry = tracing_subscriber::registry()
         .with(opentelemetry)
         // Continue logging to stdout as well
-        .with(fmt_layer)
-        .try_init()?;
+        .with(fmt_layer);
+
+    let tracing_subscriber_registry_no_otel = tracing_subscriber::registry()
+        .with(fmt::Layer::default().pretty().with_filter(tracing_filter));
+
+    match std::env::var("NO_OTLP")
+        .unwrap_or_else(|_| "0".to_owned())
+        .as_str()
+    {
+        "0" => tracing_subscriber_registry.try_init()?,
+        _ => tracing_subscriber_registry_no_otel.try_init()?,
+    };
 
     Ok(())
 }

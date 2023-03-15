@@ -883,6 +883,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tracing-opentelemetry",
+ "tracing-serde",
  "tracing-subscriber",
  "typeshare",
  "yup-oauth2",
