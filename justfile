@@ -35,6 +35,9 @@ test-all *FLAGS:
 build-arm64:
   cross build --target=aarch64-unknown-linux-gnu --release
 
+jaeger:
+  docker run --name jaeger -p 4317:4317 -p 16686:16686 -e COLLECTOR_OTLP_ENABLED=true jaegertracing/all-in-one:latest
+
 run-with-jaeger:
   #!/bin/bash
   set -ux
@@ -42,9 +45,9 @@ run-with-jaeger:
   run_commands () (
      trap - INT
      echo 'starting jaeger'
-     docker run -d --name jaeger -p 4317:4317 -p 16686:16686 -e COLLECTOR_OTLP_ENABLED=true jaegertracing/all-in-one:latest
-     echo 'just run'
-     just run
+     just jaeger &
+     echo 'cargo run'
+     cargo run
   )
   run_commands
   docker stop jaeger; docker rm -v jaeger
@@ -57,3 +60,25 @@ fetch-etcd-protobuf-files +VERSION:
   curl -L https://github.com/etcd-io/etcd/archive/refs/tags/v{{VERSION}}.tar.gz | tar -xvzf - -C etcd-api-protos/etcd-repo --strip-components=1
   rsync -am --include='*.proto' --include='*/' --exclude='*' etcd-api-protos/etcd-repo/api/ etcd-api-protos/etcd/api/
   rm -r etcd-api-protos/etcd-repo
+
+# Run an etcd container
+etcd $NODE1="192.168.1.101":
+  echo $NODE1
+  docker run \
+    -p 2379:2379 \
+    -p 2380:2380 \
+    --name etcd quay.io/coreos/etcd:latest \
+    /usr/local/bin/etcd \
+    --data-dir=/etcd-data --name node1 \
+    --initial-advertise-peer-urls http://${NODE1}:2380 --listen-peer-urls http://0.0.0.0:2380 \
+    --advertise-client-urls http://${NODE1}:2379 --listen-client-urls http://0.0.0.0:2379 \
+    --initial-cluster node1=http://${NODE1}:2380
+
+backend_etcd_related_env := 'HOSTNAME=replica12345 APP_ETCD_URL=http://localhost:2379'
+
+# Run against local etcd
+run-with-etcd:
+  {{backend_etcd_related_env}} just run
+
+run-with-etcd-and-otlp:
+  {{backend_etcd_related_env}} cargo run
