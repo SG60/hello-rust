@@ -5,12 +5,16 @@ use serde::{Deserialize, Serialize};
 pub struct Settings {
     pub google_oauth_client_id: String,
     pub google_oauth_client_secret: String,
+
+    pub etcd_url: Option<String>,
+    pub clustered: bool,
 }
 
 #[tracing::instrument]
 pub fn get_settings() -> Result<Settings, ConfigError> {
     // Env vars! -----------------------------------
     let settings = Config::builder()
+        .set_default("clustered", "false")?
         .add_source(config::Environment::with_prefix("APP"))
         .build()
         .unwrap();
