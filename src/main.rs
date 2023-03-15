@@ -15,6 +15,7 @@ mod aws;
 mod notion_api;
 mod settings;
 mod trace_output_fmt;
+mod cluster_management;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
