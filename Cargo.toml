@@ -1,9 +1,9 @@
 [package]
-name = "hello-rust"
+name = "hello-rust-backend"
 version = "0.1.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
-default-run = "hello-rust"
+default-run = "hello-rust-backend"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -31,6 +31,7 @@ tracing = "0.1.37"
 # Implements the types defined in the Otel spec
 # "rt-tokio-current-thread" required for batch exports of spans
 opentelemetry = { version = "0.18.0", features = ["rt-tokio-current-thread"] }
+opentelemetry-semantic-conventions = "0.10.0"
 # Integration between the tracing crate and the opentelemetry crate
 tracing-opentelemetry = "0.18.0"
 # Allows you to export data to OTEL collector

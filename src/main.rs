@@ -1,10 +1,11 @@
 use anyhow::Result;
-use opentelemetry_otlp::WithExportConfig;
 use std::time::Duration;
 use tokio::signal;
 use tokio::sync::watch;
-use tracing::{event, span, Level};
 
+use opentelemetry_otlp::WithExportConfig;
+use opentelemetry_semantic_conventions as semcov;
+use tracing::{event, span, Level};
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
 
 mod aws;
@@ -107,28 +108,32 @@ fn set_up_logging() -> Result<()> {
         .with_exporter(opentelemetry_otlp::new_exporter().tonic().with_env())
         // config, service.name etc.
         .with_trace_config(opentelemetry::sdk::trace::config().with_resource(
-            opentelemetry::sdk::Resource::new(vec![opentelemetry::KeyValue::new(
-                "service.name",
-                "hello-rust-backend",
-            )]),
+            opentelemetry::sdk::Resource::new(vec![
+                semcov::resource::SERVICE_NAME.string(env!("CARGO_PKG_NAME")),
+                semcov::resource::SERVICE_VERSION.string(env!("CARGO_PKG_VERSION")),
+            ]),
         ))
         .install_batch(opentelemetry::runtime::TokioCurrentThread)?;
+
+    let tracing_filter = tracing_subscriber::filter::filter_fn(|metadata| {
+        metadata.target() == env!("CARGO_PKG_NAME").replace("-", "_")
+    });
 
     // Create a tracing layer with the configured tracer
     let opentelemetry = tracing_opentelemetry::layer()
         .with_tracer(tracer)
         // Add a filter to the OTEL layer so that it only observes
         // the spans that I want
-        .with_filter(tracing_subscriber::filter::filter_fn(|metadata| {
-            metadata.target() == "hello_rust"
-        }));
+        .with_filter(tracing_filter.clone());
+
+    let fmt_layer = fmt::Layer::default().with_filter(tracing_filter);
 
     // The SubscriberExt and SubscriberInitExt traits are needed to extend the
     // Registry to accept `opentelemetry (the OpenTelemetryLayer type).
     tracing_subscriber::registry()
         .with(opentelemetry)
         // Continue logging to stdout as well
-        .with(fmt::Layer::default())
+        .with(fmt_layer)
         .try_init()?;
 
     Ok(())
