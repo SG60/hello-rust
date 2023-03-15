@@ -1,15 +1,9 @@
 syntax = "proto3";
 package etcdserverpb;
 
-import "gogoproto/gogo.proto";
 import "etcdserver.proto";
 import "rpc.proto";
 import "etcd/api/membershippb/membership.proto";
-
-option (gogoproto.marshaler_all) = true;
-option (gogoproto.sizer_all) = true;
-option (gogoproto.unmarshaler_all) = true;
-option (gogoproto.goproto_getters_all) = false;
 
 message RequestHeader {
   uint64 ID = 1;
