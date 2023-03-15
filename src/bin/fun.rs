@@ -1,7 +1,7 @@
-use hello_rust::aws::*;
-use hello_rust::notion_api::_get_pages_from_notion_database;
-use hello_rust::settings;
-use hello_rust::{get_some_data_from_google_calendar, GoogleToken};
+use hello_rust_backend::aws::*;
+use hello_rust_backend::notion_api::_get_pages_from_notion_database;
+use hello_rust_backend::settings;
+use hello_rust_backend::{get_some_data_from_google_calendar, GoogleToken};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

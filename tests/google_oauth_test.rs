@@ -1,6 +1,6 @@
-use hello_rust::aws::{get_users, load_client};
-use hello_rust::settings;
-use hello_rust::GoogleToken;
+use hello_rust_backend::aws::{get_users, load_client};
+use hello_rust_backend::settings;
+use hello_rust_backend::GoogleToken;
 
 #[tokio::test]
 #[ignore]
@@ -16,7 +16,7 @@ async fn test_google_oauth_token_refresh() -> Result<(), Box<dyn std::error::Err
         Err(e) => return Err(e.into()),
     };
 
-    let one_user_record = hello_rust::filter_data_by_hardcoded_user_id(&users)
+    let one_user_record = hello_rust_backend::filter_data_by_hardcoded_user_id(&users)
         .expect("should be a record with this user_id");
 
     if let Some(google_refresh_token) = &one_user_record.google_refresh_token {
