@@ -2,17 +2,17 @@
 set dotenv-load
 
 default:
-  @just --choose
+  @just --list
 
-list:
-    just --list
+j:
+    just --choose
 
-run:
-    env $(cat .env | xargs) cargo run
+run $NO_OTLP="1":
+    cargo run
 
 # run the `fun` binary
 fun:
-    env $(cat .env | xargs) cargo run --bin fun
+    cargo run --bin fun
 
 # clippy
 lint:
