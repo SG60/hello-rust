@@ -11,8 +11,8 @@ use self::etcdserverpb::{
     LeaseKeepAliveRequest, PutRequest, PutResponse,
 };
 
-const REPLICA_PREFIX: &str = "/nodes/";
-const SYNC_LOCK_PREFIX: &str = "/sync_locks/";
+pub const REPLICA_PREFIX: &str = "/nodes/";
+pub const SYNC_LOCK_PREFIX: &str = "/sync_locks/";
 
 pub mod mvccpb {
     tonic::include_proto!("mvccpb"); // The string specified here must match the proto package name
@@ -26,10 +26,12 @@ pub mod etcdserverpb {
     tonic::include_proto!("etcdserverpb");
 }
 
+#[tracing::instrument]
 pub async fn make_kv_client(etcd_endpoint: String) -> Result<KvClient<Channel>> {
     Ok(KvClient::connect(etcd_endpoint).await?)
 }
 
+#[tracing::instrument]
 pub async fn make_lease_client(etcd_endpoint: String) -> Result<LeaseClient<Channel>> {
     Ok(LeaseClient::connect(etcd_endpoint).await?)
 }
@@ -45,7 +47,7 @@ pub async fn create_lease(mut grpc_client: LeaseClient<Channel>) -> Result<Lease
 }
 
 #[derive(Error, Debug)]
-enum Error {
+pub enum Error {
     #[error("environment variable not found")]
     VarError(#[from] VarError),
     #[error("error in grpc response status")]
@@ -60,17 +62,19 @@ enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+#[derive(Debug)]
 pub struct LeaseKeepAlive {
     id: i64,
     request_sender: Sender<etcdserverpb::LeaseKeepAliveRequest>,
     response_stream: tonic::Streaming<etcdserverpb::LeaseKeepAliveResponse>,
 }
 
+#[tracing::instrument]
 pub async fn lease_keep_alive(
     mut lease_client: LeaseClient<Channel>,
     lease_id: i64,
 ) -> Result<LeaseKeepAlive> {
-    let hostname = std::env::var("HOST")?;
+    event!(Level::INFO, "trying to keep the lease alive");
 
     let (req_sender, req_receiver) = channel(1024);
     let req_receiver = ReceiverStream::new(req_receiver);
