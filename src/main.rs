@@ -8,7 +8,9 @@ use tokio::sync::watch;
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_semantic_conventions as semcov;
 use tracing::{event, span, Level};
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer};
+use tracing_subscriber::{
+    filter::Targets, fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer,
+};
 
 use trace_output_fmt::JsonWithTraceId;
 
@@ -127,6 +129,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Set up an OTEL pipeline when the OTLP endpoint is set. Otherwise just set up tokio tracing
+/// support.
 fn set_up_logging() -> Result<()> {
     // Install a new OpenTelemetry trace pipeline
     let tracer = opentelemetry_otlp::new_pipeline()
@@ -143,38 +147,38 @@ fn set_up_logging() -> Result<()> {
         ))
         .install_batch(opentelemetry::runtime::TokioCurrentThread)?;
 
-    let tracing_filter = tracing_subscriber::filter::filter_fn(|metadata| {
-        metadata.target() == env!("CARGO_PKG_NAME").replace('-', "_")
-    });
+    let global_tracing_filter = Targets::default().with_target("hello_rust_backend", Level::TRACE);
 
     // Create a tracing layer with the configured tracer
-    let opentelemetry = tracing_opentelemetry::layer()
-        .with_tracer(tracer)
-        // Add a filter to the OTEL layer so that it only observes
-        // the spans that I want
-        .with_filter(tracing_filter.clone());
+    let opentelemetry = tracing_opentelemetry::layer().with_tracer(tracer);
 
-    let fmt_layer = fmt::Layer::default()
-        .json()
-        .event_format(JsonWithTraceId)
-        .with_filter(tracing_filter.clone());
+    let fmt_layer = fmt::Layer::default().json().event_format(JsonWithTraceId);
 
-    // The SubscriberExt and SubscriberInitExt traits are needed to extend the
-    // Registry to accept `opentelemetry (the OpenTelemetryLayer type).
-    let tracing_subscriber_registry = tracing_subscriber::registry()
-        .with(opentelemetry)
-        // Continue logging to stdout as well
-        .with(fmt_layer);
-
-    let tracing_subscriber_registry_no_otel = tracing_subscriber::registry()
-        .with(fmt::Layer::default().pretty().with_filter(tracing_filter));
-
+    // Include an option for when there is no otlp endpoint available. In this case, pretty print
+    // events, as the data doesn't need to be nicely formatted json for analysis.
     match std::env::var("NO_OTLP")
         .unwrap_or_else(|_| "0".to_owned())
         .as_str()
     {
-        "0" => tracing_subscriber_registry.try_init()?,
-        _ => tracing_subscriber_registry_no_otel.try_init()?,
+        "0" => {
+            // The SubscriberExt and SubscriberInitExt traits are needed to extend the
+            // Registry to accept `opentelemetry (the OpenTelemetryLayer type).
+            let tracing_subscriber_registry = tracing_subscriber::registry()
+                .with(opentelemetry)
+                // Continue logging to stdout as well
+                .with(fmt_layer)
+                // Add a filter to the layer so that it only observes the spans that I want
+                .with(global_tracing_filter);
+
+            tracing_subscriber_registry.try_init()?
+        }
+        _ => {
+            let tracing_subscriber_registry_no_otel = tracing_subscriber::registry()
+                .with(fmt::Layer::default().pretty())
+                .with(global_tracing_filter);
+
+            tracing_subscriber_registry_no_otel.try_init()?
+        }
     };
 
     Ok(())
