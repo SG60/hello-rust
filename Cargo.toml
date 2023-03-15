@@ -40,6 +40,14 @@ opentelemetry-otlp = "0.11.0"
 tracing-subscriber = { version = "0.3.16", features = ["json"] }
 tracing-serde = "0.1.3"
 
+# GRPC (used for connecting to etcd)
+tonic = "0.8.3"
+prost = "0.11.8"
+
+[build-dependencies]
+# compile .proto files into an api
+tonic-build = "0.8.4"
+
 # Cross (cross-compilation) Config
 [package.metadata.cross.target.aarch64-unknown-linux-gnu]
 # install protoc protobuf compiler in cross docker image
