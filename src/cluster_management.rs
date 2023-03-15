@@ -8,7 +8,7 @@ use tracing::{event, Level};
 
 use self::etcdserverpb::{
     kv_client::KvClient, lease_client::LeaseClient, LeaseGrantRequest, LeaseGrantResponse,
-    LeaseKeepAliveRequest, PutRequest, PutResponse,
+    LeaseKeepAliveRequest,
 };
 
 pub const REPLICA_PREFIX: &str = "/nodes/";

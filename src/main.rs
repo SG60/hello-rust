@@ -43,8 +43,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(settings_map) => break settings_map,
         }
     };
-    println!("Settings successfully obtained.");
-    println!("{:#?}", settings_map);
+    event!(Level::INFO, "Settings successfully obtained.");
+    event!(Level::INFO, "{:#?}", settings_map);
 
     dbg!(std::env::var("NO_OTLP")
         .unwrap_or_else(|_| "0".to_owned())
@@ -52,6 +52,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if settings_map.etcd_url.is_some() {
         event!(Level::INFO, "About to try talking to etcd!");
+
+        event!(Level::INFO, "Clustered setting: {}", settings_map.clustered);
 
         let result =
             do_some_stuff_with_etcd(&settings_map.etcd_url.expect("should be valid string")).await;
