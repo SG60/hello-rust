@@ -14,14 +14,17 @@ use self::etcdserverpb::{
 pub const REPLICA_PREFIX: &str = "/nodes/";
 pub const SYNC_LOCK_PREFIX: &str = "/sync_locks/";
 
+#[allow(clippy::all)]
 pub mod mvccpb {
     tonic::include_proto!("mvccpb"); // The string specified here must match the proto package name
 }
 
+#[allow(clippy::all)]
 pub mod authpb {
     tonic::include_proto!("authpb");
 }
 
+#[allow(clippy::all)]
 pub mod etcdserverpb {
     tonic::include_proto!("etcdserverpb");
 }
