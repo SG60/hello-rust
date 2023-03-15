@@ -1,4 +1,5 @@
 use anyhow::Result;
+use hello_rust_backend::do_some_stuff_with_etcd;
 use std::time::Duration;
 use tokio::signal;
 use tokio::sync::watch;
@@ -12,10 +13,10 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, Lay
 use trace_output_fmt::JsonWithTraceId;
 
 mod aws;
+mod cluster_management;
 mod notion_api;
 mod settings;
 mod trace_output_fmt;
-mod cluster_management;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -42,6 +43,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     println!("Settings successfully obtained.");
     println!("{:#?}", settings_map);
+
+    dbg!(std::env::var("NO_OTLP")
+        .unwrap_or_else(|_| "0".to_owned())
+        .as_str());
+
+    if settings_map.etcd_url.is_some() {
+        event!(Level::INFO, "About to try talking to etcd!");
+
+        let result =
+            do_some_stuff_with_etcd(&settings_map.etcd_url.expect("should be valid string")).await;
+
+        match result {
+            Ok(result) => {
+                dbg!("{:#?}", &result);
+                event!(Level::INFO, "{:#?}", result);
+            }
+            Err(error) => event!(Level::ERROR, "Error while talking to etcd. {}", error),
+        }
+        event!(Level::INFO, "Finished talking to etcd.");
+    } else {
+        event!(Level::WARN, "No etcd endpoint set.")
+    }
 
     async fn some_operation(message: &str, duration: Duration, receiver: watch::Receiver<()>) {
         loop {

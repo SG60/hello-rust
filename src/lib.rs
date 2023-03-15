@@ -1,6 +1,13 @@
 use serde::{Deserialize, Serialize};
+use tracing::{event, Level};
+
+use crate::cluster_management::etcdserverpb::PutRequest;
+use crate::cluster_management::{
+    create_lease, lease_keep_alive, make_kv_client, make_lease_client,
+};
 
 pub mod aws;
+pub mod cluster_management;
 pub mod notion_api;
 pub mod settings;
 
@@ -155,6 +162,31 @@ pub async fn get_some_data_from_google_calendar(
     dbg!("from the google response:\n{:#?}", &res.items[0]["summary"]);
 
     Ok(res)
+}
+
+pub async fn do_some_stuff_with_etcd(etcd_endpoint: &str) -> cluster_management::Result<()> {
+    let lease_client = make_lease_client(etcd_endpoint.to_owned()).await?;
+    let mut kv_client = make_kv_client(etcd_endpoint.to_owned()).await?;
+
+    let lease = create_lease(lease_client.to_owned()).await?;
+    event!(Level::INFO, "current lease: {:#?}", lease.id);
+
+    let _keep_alive_response = lease_keep_alive(lease_client, lease.id).await?;
+
+    let hostname = std::env::var("HOSTNAME")?;
+    let kv_request = tonic::Request::new(PutRequest {
+        key: format!("{}{}", cluster_management::REPLICA_PREFIX, hostname).into(),
+        value: "replica".into(),
+        ..Default::default()
+    });
+
+    let kv_response = kv_client.put(kv_request).await?;
+
+    let kv_response_inner = kv_response.into_inner();
+
+    event!(Level::DEBUG, "{:#?}", kv_response_inner);
+
+    Ok(())
 }
 
 #[cfg(test)]
