@@ -48,3 +48,12 @@ run-with-jaeger:
   )
   run_commands
   docker stop jaeger; docker rm -v jaeger
+
+# Fetch the protobuf files for the etcd API
+# version required (e.g. 3.5.7)
+# Will still require some tweaking after the download
+fetch-etcd-protobuf-files +VERSION:
+  mkdir etcd-api-protos/etcd-repo
+  curl -L https://github.com/etcd-io/etcd/archive/refs/tags/v{{VERSION}}.tar.gz | tar -xvzf - -C etcd-api-protos/etcd-repo --strip-components=1
+  rsync -am --include='*.proto' --include='*/' --exclude='*' etcd-api-protos/etcd-repo/api/ etcd-api-protos/etcd/api/
+  rm -r etcd-api-protos/etcd-repo
