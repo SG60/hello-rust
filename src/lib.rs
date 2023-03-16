@@ -1,3 +1,5 @@
+use std::future::Future;
+
 use serde::{Deserialize, Serialize};
 use tracing::{event, Level};
 
@@ -164,9 +166,40 @@ pub async fn get_some_data_from_google_calendar(
     Ok(res)
 }
 
+pub async fn do_with_retries<A, Fut, E, F: Fn() -> Fut>(f: F) -> Result<A, E>
+where
+    E: std::error::Error,
+    Fut: Future<Output = Result<A, E>>,
+{
+    let mut retry_wait_seconds = 1;
+
+    loop {
+        let result = f().await;
+
+        match result {
+            Err(error) => {
+                event!(
+                    Level::WARN,
+                    "Error, trying again. Waiting {} seconds. {}",
+                    retry_wait_seconds,
+                    error
+                );
+
+                tokio::time::sleep(std::time::Duration::from_secs(retry_wait_seconds)).await;
+                if retry_wait_seconds < 300 {
+                    retry_wait_seconds += retry_wait_seconds
+                };
+            }
+            Ok(result) => break Ok(result),
+        }
+    }
+}
+
+#[tracing::instrument]
 pub async fn do_some_stuff_with_etcd(etcd_endpoint: &str) -> cluster_management::Result<()> {
-    let lease_client = make_lease_client(etcd_endpoint.to_owned()).await?;
-    let mut kv_client = make_kv_client(etcd_endpoint.to_owned()).await?;
+    event!(Level::INFO, "Initialising etcd grpc clients");
+    let lease_client = do_with_retries(|| make_lease_client(etcd_endpoint.to_owned())).await?;
+    let mut kv_client = do_with_retries(|| make_kv_client(etcd_endpoint.to_owned())).await?;
 
     let lease = create_lease(lease_client.to_owned()).await?;
     event!(Level::INFO, "current lease: {:#?}", lease.id);
