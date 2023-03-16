@@ -7,10 +7,8 @@ use tokio::sync::watch;
 // tracing
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_semantic_conventions as semcov;
-use tracing::{event, span, Level};
-use tracing_subscriber::{
-    filter::Targets, fmt, layer::SubscriberExt, util::SubscriberInitExt, Layer,
-};
+use tracing::{event, span, Instrument, Level};
+use tracing_subscriber::{filter::Targets, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 use trace_output_fmt::JsonWithTraceId;
 
@@ -50,25 +48,35 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|_| "0".to_owned())
         .as_str());
 
-    if settings_map.etcd_url.is_some() {
-        event!(Level::INFO, "About to try talking to etcd!");
+    let span = span!(Level::TRACE, "talk to etcd");
+    async {
+        // This is correct! If we yield here, the span will be exited,
+        // and re-entered when we resume.
+        if settings_map.etcd_url.is_some() {
+            event!(Level::INFO, "About to try talking to etcd!");
 
-        event!(Level::INFO, "Clustered setting: {}", settings_map.clustered);
+            event!(Level::INFO, "Clustered setting: {}", settings_map.clustered);
 
-        let result =
-            do_some_stuff_with_etcd(&settings_map.etcd_url.expect("should be valid string")).await;
+            let result =
+                do_some_stuff_with_etcd(&settings_map.etcd_url.expect("should be valid string"))
+                    .await;
 
-        match result {
-            Ok(result) => {
-                dbg!("{:#?}", &result);
-                event!(Level::INFO, "{:#?}", result);
+            match result {
+                Ok(result) => {
+                    dbg!("{:#?}", &result);
+                    event!(Level::INFO, "{:#?}", result);
+                }
+                Err(error) => event!(Level::ERROR, "Error while talking to etcd. {:#?}", error),
             }
-            Err(error) => event!(Level::ERROR, "Error while talking to etcd. {}", error),
+            event!(Level::INFO, "Finished talking to etcd.");
+        } else {
+            event!(Level::WARN, "No etcd endpoint set.")
         }
-        event!(Level::INFO, "Finished talking to etcd.");
-    } else {
-        event!(Level::WARN, "No etcd endpoint set.")
     }
+    // instrument the async block with the span...
+    .instrument(span)
+    // ...and await it.
+    .await;
 
     async fn some_operation(message: &str, duration: Duration, receiver: watch::Receiver<()>) {
         loop {
