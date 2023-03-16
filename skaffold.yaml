@@ -7,6 +7,7 @@ build:
 
   artifacts:
     - image: lhr.ocir.io/lrdyqp2xtoja/hello-rust-backend
+      context: .
       custom:
         dependencies:
           paths:
@@ -34,4 +35,4 @@ manifests:
 
 deploy:
   kubectl:
-    defaultNamespace: dev-ns-hello-rust-notion-sync
+    defaultNamespace: hello-rust-notion-sync
