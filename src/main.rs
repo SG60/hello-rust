@@ -1,18 +1,13 @@
 use anyhow::Result;
-use hello_rust_backend::do_some_stuff_with_etcd;
 use std::time::Duration;
 use tokio::signal;
 use tokio::sync::watch;
 
 // tracing
+use hello_rust_backend::tracing_utils::set_up_logging;
 use tracing::{event, span, Instrument, Level};
-use tracing_utils::set_up_logging;
 
-mod aws;
-mod cluster_management;
-mod notion_api;
-mod settings;
-mod tracing_utils;
+use hello_rust_backend::do_some_stuff_with_etcd;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -24,7 +19,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Env vars! -----------------------------------
     let mut retry_wait_seconds = 1;
     let settings_map = loop {
-        let settings_map = settings::get_settings();
+        let settings_map = hello_rust_backend::settings::get_settings();
         match settings_map {
             Err(error) => {
                 println!("Error obtaining settings");

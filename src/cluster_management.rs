@@ -18,18 +18,20 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub mod etcd {
     // reexports
     pub use self::etcdserverpb::{
-        kv_client::KvClient, lease_client::LeaseClient, LeaseGrantRequest, LeaseGrantResponse,
-        LeaseKeepAliveRequest, PutRequest,
+        kv_client, lease_client, LeaseGrantRequest, LeaseGrantResponse, LeaseKeepAliveRequest,
+        PutRequest,
     };
 
     use std::env::VarError;
     use thiserror::Error;
-
     use tokio::sync::mpsc::channel;
     use tokio::sync::mpsc::Sender;
     use tokio_stream::wrappers::ReceiverStream;
-    use tonic::transport::Channel;
+    use tonic::transport::Endpoint;
     use tracing::{event, Level};
+
+    use crate::tracing_utils::GrpcInterceptor;
+    use crate::tracing_utils::InterceptedGrpcService;
 
     #[allow(clippy::all)]
     pub mod mvccpb {
@@ -67,18 +69,24 @@ pub mod etcd {
         CreateWatch,
     }
 
-    #[tracing::instrument]
-    pub async fn make_kv_client(etcd_endpoint: String) -> Result<KvClient<Channel>> {
-        Ok(KvClient::connect(etcd_endpoint).await?)
+    type KvClient = kv_client::KvClient<InterceptedGrpcService>;
+    type LeaseClient = lease_client::LeaseClient<InterceptedGrpcService>;
+    pub struct EtcdClients {
+        pub kv: KvClient,
+        pub lease: LeaseClient,
+    }
+    impl EtcdClients {
+        pub async fn connect(etcd_endpoint: String) -> Result<Self> {
+            let channel = Endpoint::from_shared(etcd_endpoint)?.connect().await?;
+            Ok(Self {
+                kv: kv_client::KvClient::with_interceptor(channel.clone(), GrpcInterceptor),
+                lease: lease_client::LeaseClient::with_interceptor(channel, GrpcInterceptor),
+            })
+        }
     }
 
     #[tracing::instrument]
-    pub async fn make_lease_client(etcd_endpoint: String) -> Result<LeaseClient<Channel>> {
-        Ok(LeaseClient::connect(etcd_endpoint).await?)
-    }
-
-    #[tracing::instrument]
-    pub async fn create_lease(mut grpc_client: LeaseClient<Channel>) -> Result<LeaseGrantResponse> {
+    pub async fn create_lease(mut grpc_client: LeaseClient) -> Result<LeaseGrantResponse> {
         let request = tonic::Request::new(LeaseGrantRequest { id: 0, ttl: 30 });
         let response = grpc_client.lease_grant(request).await?;
 
@@ -89,7 +97,7 @@ pub mod etcd {
 
     #[tracing::instrument]
     pub async fn lease_keep_alive(
-        mut lease_client: LeaseClient<Channel>,
+        mut lease_client: LeaseClient,
         lease_id: i64,
     ) -> Result<LeaseKeepAlive> {
         event!(Level::INFO, "trying to keep the lease alive");
