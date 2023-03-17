@@ -3,10 +3,8 @@ use std::future::Future;
 use serde::{Deserialize, Serialize};
 use tracing::{event, Level};
 
-use crate::cluster_management::etcdserverpb::PutRequest;
-use crate::cluster_management::{
-    create_lease, lease_keep_alive, make_kv_client, make_lease_client,
-};
+use crate::cluster_management::etcd;
+use etcd::{create_lease, lease_keep_alive, make_kv_client, make_lease_client, PutRequest};
 
 pub mod aws;
 pub mod cluster_management;
@@ -196,7 +194,7 @@ where
 }
 
 #[tracing::instrument]
-pub async fn do_some_stuff_with_etcd(etcd_endpoint: &str) -> cluster_management::Result<()> {
+pub async fn do_some_stuff_with_etcd(etcd_endpoint: &str) -> etcd::Result<()> {
     event!(Level::INFO, "Initialising etcd grpc clients");
     let lease_client = do_with_retries(|| make_lease_client(etcd_endpoint.to_owned())).await?;
     let mut kv_client = do_with_retries(|| make_kv_client(etcd_endpoint.to_owned())).await?;
