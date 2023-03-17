@@ -3,6 +3,7 @@ use anyhow::Result;
 // tracing
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_semantic_conventions as semcov;
+use tonic::service::Interceptor;
 use tracing::Level;
 use tracing_subscriber::{filter::Targets, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -64,3 +65,14 @@ pub fn set_up_logging() -> Result<()> {
 
     Ok(())
 }
+
+#[derive(Clone)]
+pub struct GrpcInterceptor;
+impl Interceptor for GrpcInterceptor {
+    fn call(&mut self, req: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
+        Ok(req)
+    }
+}
+
+pub type InterceptedGrpcService =
+    tonic::codegen::InterceptedService<tonic::transport::Channel, GrpcInterceptor>;
