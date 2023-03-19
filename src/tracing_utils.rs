@@ -1,10 +1,15 @@
 //! Utilities for tracing and logging.
+use std::collections::HashMap;
+
 use anyhow::Result;
+use opentelemetry_http::HeaderInjector;
 // tracing
+use opentelemetry::{global, propagation::Injector, sdk::propagation::TraceContextPropagator};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_semantic_conventions as semcov;
-use tonic::service::Interceptor;
-use tracing::Level;
+use tonic::{metadata::MetadataMap, service::Interceptor};
+use tracing::{event, Level, Span};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_subscriber::{filter::Targets, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
 use self::trace_output_fmt::JsonWithTraceId;
@@ -14,6 +19,8 @@ pub mod trace_output_fmt;
 /// Set up an OTEL pipeline when the OTLP endpoint is set. Otherwise just set up tokio tracing
 /// support.
 pub fn set_up_logging() -> Result<()> {
+    global::set_text_map_propagator(TraceContextPropagator::new());
+
     // Install a new OpenTelemetry trace pipeline
     let tracer = opentelemetry_otlp::new_pipeline()
         .tracing()
@@ -69,10 +76,55 @@ pub fn set_up_logging() -> Result<()> {
 #[derive(Clone)]
 pub struct GrpcInterceptor;
 impl Interceptor for GrpcInterceptor {
-    fn call(&mut self, req: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
+    fn call(&mut self, mut req: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
+        // let mut metadata_map = MetadataMap::new();
+        //
+        inject_stuff(&req);
+
+        dbg!(req.get_ref());
+
         Ok(req)
     }
 }
+
+fn inject_stuff(mut req: &tonic::Request<()>) {
+    // let context = opentelemetry::Context::current();
+    let context = Span::current().context();
+
+    let mut headers = req.metadata().clone().into_headers();
+
+    event!(Level::DEBUG, "{:#?}", context);
+
+    opentelemetry::global::get_text_map_propagator(|propagator| {
+        propagator.inject_context(&context, &mut HeaderInjector(&mut headers));
+    });
+
+    dbg!(MetadataMap::from_headers(headers.clone()));
+
+    event!(Level::DEBUG, "{:#?}", headers);
+    event!(Level::DEBUG, "{:#?}", req);
+}
+/*
+*
+*
+let mut map = MetadataMap::new();
+
+map.insert("x-host", "example.com".parse().unwrap());
+map.insert("x-number", "123".parse().unwrap());
+map.insert_bin("trace-proto-bin", MetadataValue::from_bytes(b"[binary data]"));
+*/
+
+// pub struct GrpcRequestInjector<'a>(pub &'a mut tonic::metadata::MetadataMap);
+// impl<'a> Injector for GrpcRequestInjector<'a> {
+//     fn set(&mut self, key: &str, value: String) {
+//         let name = key.clone();
+//         if let Ok(val) = value.parse() {
+//             self.0.insert(name, val);
+//         }
+//
+//         // self.0.insert(key.parse().unwrap(), value.parse().unwrap());
+//     }
+// }
 
 pub type InterceptedGrpcService =
     tonic::codegen::InterceptedService<tonic::transport::Channel, GrpcInterceptor>;
