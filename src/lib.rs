@@ -3,15 +3,13 @@ use std::future::Future;
 use serde::{Deserialize, Serialize};
 use tracing::{event, Level};
 
-use crate::cluster_management::etcdserverpb::PutRequest;
-use crate::cluster_management::{
-    create_lease, lease_keep_alive, make_kv_client, make_lease_client,
-};
+use cluster_management::etcd::{self, create_lease, lease_keep_alive, EtcdClients, PutRequest};
 
 pub mod aws;
 pub mod cluster_management;
 pub mod notion_api;
 pub mod settings;
+pub mod tracing_utils;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GoogleResponse {
@@ -196,10 +194,12 @@ where
 }
 
 #[tracing::instrument]
-pub async fn do_some_stuff_with_etcd(etcd_endpoint: &str) -> cluster_management::Result<()> {
+pub async fn do_some_stuff_with_etcd(etcd_endpoint: &str) -> etcd::Result<()> {
     event!(Level::INFO, "Initialising etcd grpc clients");
-    let lease_client = do_with_retries(|| make_lease_client(etcd_endpoint.to_owned())).await?;
-    let mut kv_client = do_with_retries(|| make_kv_client(etcd_endpoint.to_owned())).await?;
+    let etcd_clients = do_with_retries(|| EtcdClients::connect(etcd_endpoint.to_owned())).await?;
+    // let lease_client = do_with_retries(|| <Channel>make_lease_client(etcd_endpoint.to_owned())).await?;
+    let lease_client = etcd_clients.lease;
+    let mut kv_client = etcd_clients.kv;
 
     let lease = create_lease(lease_client.to_owned()).await?;
     event!(Level::INFO, "current lease: {:#?}", lease.id);
