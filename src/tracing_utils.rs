@@ -7,7 +7,11 @@ use opentelemetry_http::HeaderInjector;
 use opentelemetry::{global, propagation::Injector, sdk::propagation::TraceContextPropagator};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_semantic_conventions as semcov;
-use tonic::{metadata::MetadataMap, service::Interceptor};
+use reqwest::header::HeaderName;
+use tonic::{
+    metadata::{MetadataKey, MetadataMap},
+    service::Interceptor,
+};
 use tracing::{event, Level, Span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_subscriber::{filter::Targets, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -73,58 +77,39 @@ pub fn set_up_logging() -> Result<()> {
     Ok(())
 }
 
+/// This interceptor adds tokio tracing opentelemetry headers to grpc requests.
+/// Allows stitching together distributed traces!
 #[derive(Clone)]
 pub struct GrpcInterceptor;
 impl Interceptor for GrpcInterceptor {
     fn call(&mut self, mut req: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
-        // let mut metadata_map = MetadataMap::new();
-        //
-        inject_stuff(&req);
+        // get otel context from current tokio tracing span
+        let context = Span::current().context();
 
-        dbg!(req.get_ref());
+        let mut headers = req.metadata().clone().into_headers();
+        opentelemetry::global::get_text_map_propagator(|propagator| {
+            propagator.inject_context(&context, &mut HeaderInjector(&mut headers));
+        });
+
+        // metadata map (which is an encapsulated HeaderMap)
+        let mut_meta = req.metadata_mut();
+
+        for i in ["traceparent", "tracestate"] {
+            if let Some(header) = headers.get(i) {
+                mut_meta.insert(
+                    i,
+                    header
+                        .to_str()
+                        .expect("should be valid string")
+                        .parse()
+                        .expect("should be valid string and parse"),
+                );
+            };
+        }
 
         Ok(req)
     }
 }
-
-fn inject_stuff(mut req: &tonic::Request<()>) {
-    // let context = opentelemetry::Context::current();
-    let context = Span::current().context();
-
-    let mut headers = req.metadata().clone().into_headers();
-
-    event!(Level::DEBUG, "{:#?}", context);
-
-    opentelemetry::global::get_text_map_propagator(|propagator| {
-        propagator.inject_context(&context, &mut HeaderInjector(&mut headers));
-    });
-
-    dbg!(MetadataMap::from_headers(headers.clone()));
-
-    event!(Level::DEBUG, "{:#?}", headers);
-    event!(Level::DEBUG, "{:#?}", req);
-}
-/*
-*
-*
-let mut map = MetadataMap::new();
-
-map.insert("x-host", "example.com".parse().unwrap());
-map.insert("x-number", "123".parse().unwrap());
-map.insert_bin("trace-proto-bin", MetadataValue::from_bytes(b"[binary data]"));
-*/
-
-// pub struct GrpcRequestInjector<'a>(pub &'a mut tonic::metadata::MetadataMap);
-// impl<'a> Injector for GrpcRequestInjector<'a> {
-//     fn set(&mut self, key: &str, value: String) {
-//         let name = key.clone();
-//         if let Ok(val) = value.parse() {
-//             self.0.insert(name, val);
-//         }
-//
-//         // self.0.insert(key.parse().unwrap(), value.parse().unwrap());
-//     }
-// }
 
 pub type InterceptedGrpcService =
     tonic::codegen::InterceptedService<tonic::transport::Channel, GrpcInterceptor>;
