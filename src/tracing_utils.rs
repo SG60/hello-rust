@@ -1,12 +1,13 @@
 //! Utilities for tracing and logging.
 
 use anyhow::Result;
-use opentelemetry_http::HeaderInjector;
+use std::str::FromStr;
+
 // tracing
 use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_semantic_conventions as semcov;
-use tonic::service::Interceptor;
+use tonic::{metadata::MetadataKey, service::Interceptor};
 use tracing::{Level, Span};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_subscriber::{
@@ -81,25 +82,26 @@ pub fn set_up_logging() -> Result<()> {
 #[derive(Clone)]
 pub struct GrpcInterceptor;
 impl Interceptor for GrpcInterceptor {
-    fn call(&mut self, req: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
+    fn call(&mut self, mut req: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
         // get otel context from current tokio tracing span
         let context = Span::current().context();
 
-        let (metadata, extensions, message) = req.into_parts();
-
-        let mut headers = metadata.into_headers();
-
         opentelemetry::global::get_text_map_propagator(|propagator| {
-            propagator.inject_context(&context, &mut HeaderInjector(&mut headers));
+            propagator.inject_context(&context, &mut MetadataInjector(req.metadata_mut()));
         });
 
-        let new_request = tonic::Request::from_parts(
-            tonic::metadata::MetadataMap::from_headers(headers),
-            extensions,
-            message,
-        );
+        Ok(req)
+    }
+}
 
-        Ok(new_request)
+pub struct MetadataInjector<'a>(&'a mut tonic::metadata::MetadataMap);
+impl<'a> opentelemetry::propagation::Injector for MetadataInjector<'a> {
+    fn set(&mut self, key: &str, value: String) {
+        if let Ok(key) = MetadataKey::from_str(key) {
+            if let Ok(val) = value.parse() {
+                self.0.insert(key, val);
+            }
+        }
     }
 }
 
