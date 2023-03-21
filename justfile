@@ -38,20 +38,6 @@ build-arm64:
 jaeger:
   docker run --name jaeger -p 4317:4317 -p 16686:16686 -e COLLECTOR_OTLP_ENABLED=true jaegertracing/all-in-one:latest
 
-run-with-jaeger:
-  #!/bin/bash
-  set -ux
-  trap '' INT
-  run_commands () (
-     trap - INT
-     echo 'starting jaeger'
-     just jaeger &
-     echo 'cargo run'
-     cargo run
-  )
-  run_commands
-  docker stop jaeger; docker rm -v jaeger
-
 # Fetch the protobuf files for the etcd API
 # version required (e.g. 3.5.7)
 # Will still require some tweaking after the download
@@ -74,6 +60,21 @@ etcd $NODE1="192.168.1.101":
     --advertise-client-urls http://${NODE1}:2379 --listen-client-urls http://0.0.0.0:2379 \
     --initial-cluster node1=http://${NODE1}:2380
 
+# Run a just command and then clean up the docker image of the same name
+docker-with-cleanup just-cmd-and-container-name="etcd":
+  #!/bin/bash
+  set -ux
+  trap '' INT
+  run_commands () (
+    trap - INT
+    just {{just-cmd-and-container-name}}
+  )
+  run_commands
+  set +x
+  echo "--- CLEANING UP ---"
+  set -x
+  docker stop {{just-cmd-and-container-name}}; docker rm -v {{just-cmd-and-container-name}}
+
 backend_etcd_related_env := 'HOSTNAME=replica12345 APP_ETCD_URL=http://localhost:2379'
 
 # Run against local etcd
@@ -82,3 +83,9 @@ run-with-etcd:
 
 run-with-etcd-and-otlp:
   {{backend_etcd_related_env}} cargo run
+
+run-for-tokio-console $RUSTFLAGS="--cfg tokio_unstable" $NO_OTLP="1":
+  {{backend_etcd_related_env}} cargo run --features=tokio-console
+
+tokio-console:
+  tokio-console
