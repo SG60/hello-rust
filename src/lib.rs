@@ -3,7 +3,7 @@ use std::future::Future;
 use serde::{Deserialize, Serialize};
 use tracing::{event, Level};
 
-use cluster_management::etcd::{self, create_lease, lease_keep_alive, EtcdClients, PutRequest};
+use cluster_management::etcd::{create_lease, lease_keep_alive, EtcdClients};
 
 pub mod aws;
 pub mod cluster_management;
@@ -194,30 +194,24 @@ where
 }
 
 #[tracing::instrument]
-pub async fn do_some_stuff_with_etcd(etcd_endpoint: &str) -> etcd::Result<()> {
+pub async fn do_some_stuff_with_etcd(etcd_endpoint: &str) -> cluster_management::Result<()> {
     event!(Level::INFO, "Initialising etcd grpc clients");
-    let etcd_clients = do_with_retries(|| EtcdClients::connect(etcd_endpoint.to_owned())).await?;
-    // let lease_client = do_with_retries(|| <Channel>make_lease_client(etcd_endpoint.to_owned())).await?;
-    let lease_client = etcd_clients.lease;
-    let mut kv_client = etcd_clients.kv;
+    let mut etcd_clients =
+        do_with_retries(|| EtcdClients::connect(etcd_endpoint.to_owned())).await?;
 
-    let lease = create_lease(lease_client.to_owned()).await?;
+    let lease = create_lease(etcd_clients.lease.clone()).await?;
     event!(Level::INFO, "current lease: {:#?}", lease.id);
 
-    let _keep_alive_response = lease_keep_alive(lease_client, lease.id).await?;
+    let keep_alive_response = lease_keep_alive(etcd_clients.lease.clone(), lease.id).await?;
+    event!(Level::DEBUG, "{:#?}", keep_alive_response);
 
-    let hostname = std::env::var("HOSTNAME")?;
-    let kv_request = tonic::Request::new(PutRequest {
-        key: format!("{}{}", cluster_management::REPLICA_PREFIX, hostname).into(),
-        value: "replica".into(),
-        ..Default::default()
-    });
-
-    let kv_response = kv_client.put(kv_request).await?;
-
-    let kv_response_inner = kv_response.into_inner();
-
-    event!(Level::DEBUG, "{:#?}", kv_response_inner);
+    let kv_response = cluster_management::record_node_membership(&mut etcd_clients, lease.id)
+        .await
+        .map_err(|e| {
+            event!(Level::ERROR, "{:#?}", e);
+            e
+        })?;
+    event!(Level::DEBUG, "{:#?}", kv_response);
 
     Ok(())
 }

@@ -3,6 +3,11 @@
 
 use thiserror::Error;
 
+use self::etcd::{
+    etcdserverpb::{PutResponse, RangeResponse},
+    EtcdClients, KvClient,
+};
+
 pub const REPLICA_PREFIX: &str = "/nodes/";
 pub const SYNC_LOCK_PREFIX: &str = "/sync_locks/";
 
@@ -10,9 +15,37 @@ pub const SYNC_LOCK_PREFIX: &str = "/sync_locks/";
 pub enum Error {
     #[error("Error in etcd module")]
     EtcdError(#[from] self::etcd::Error),
+    #[error("Missing environment variable {0}")]
+    EnvVar(String),
+    #[error("Error recording node cluster membership")]
+    RecordingMembershipError(#[from] tonic::Status),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// Get an env var but record what its name was if it is missing
+fn get_env_var(key: &str) -> Result<String> {
+    std::env::var(key).or(Err(Error::EnvVar(key.into())))
+}
+
+/// Records node membership of the cluster of workers. This communicates with etcd and uses the
+/// current hostname as an identifier.
+#[tracing::instrument]
+pub async fn record_node_membership(
+    etcd_clients: &mut EtcdClients,
+    lease: i64,
+) -> Result<PutResponse> {
+    let hostname = get_env_var("HOSTNAME")?;
+
+    let kv_request = tonic::Request::new(self::etcd::PutRequest {
+        key: format!("{}{}", REPLICA_PREFIX, hostname).into(),
+        lease,
+        value: "replica".into(),
+        ..Default::default()
+    });
+
+    Ok(etcd_clients.kv.put(kv_request).await?.into_inner())
+}
 
 /// Etcd grpc api
 pub mod etcd {
@@ -69,8 +102,9 @@ pub mod etcd {
         CreateWatch,
     }
 
-    type KvClient = kv_client::KvClient<InterceptedGrpcService>;
-    type LeaseClient = lease_client::LeaseClient<InterceptedGrpcService>;
+    pub type KvClient = kv_client::KvClient<InterceptedGrpcService>;
+    pub type LeaseClient = lease_client::LeaseClient<InterceptedGrpcService>;
+    #[derive(Debug)]
     pub struct EtcdClients {
         pub kv: KvClient,
         pub lease: LeaseClient,
@@ -132,15 +166,5 @@ pub mod etcd {
             request_sender: req_sender,
             response_stream: response_receiver,
         })
-
-        // let request = tonic::Request::new(PutRequest {
-        //     key: format!("{}{}", REPLICA_PREFIX, hostname).into(),
-        //     value: "replica".into(),
-        //     ..Default::default()
-        // });
-        //
-        // let response = kv_client.put(request).await?;
-        //
-        // Ok(response.into_inner())
     }
 }
