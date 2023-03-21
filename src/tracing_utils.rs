@@ -81,34 +81,28 @@ pub fn set_up_logging() -> Result<()> {
 #[derive(Clone)]
 pub struct GrpcInterceptor;
 impl Interceptor for GrpcInterceptor {
-    fn call(&mut self, mut req: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
+    fn call(&mut self, req: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
         // get otel context from current tokio tracing span
         let context = Span::current().context();
 
-        let mut headers = req.metadata().clone().into_headers();
+        let (metadata, extensions, message) = req.into_parts();
+
+        let mut headers = metadata.into_headers();
+
         opentelemetry::global::get_text_map_propagator(|propagator| {
             propagator.inject_context(&context, &mut HeaderInjector(&mut headers));
         });
 
-        // metadata map (which is an encapsulated HeaderMap)
-        let mut_meta = req.metadata_mut();
+        let new_request = tonic::Request::from_parts(
+            tonic::metadata::MetadataMap::from_headers(headers),
+            extensions,
+            message,
+        );
 
-        for i in ["traceparent", "tracestate"] {
-            if let Some(header) = headers.get(i) {
-                mut_meta.insert(
-                    i,
-                    header
-                        .to_str()
-                        .expect("should be valid string")
-                        .parse()
-                        .expect("should be valid string and parse"),
-                );
-            };
-        }
-
-        Ok(req)
+        Ok(new_request)
     }
 }
 
+/// A tonic channel intercepted to provide distributed tracing context propagation.
 pub type InterceptedGrpcService =
     tonic::codegen::InterceptedService<tonic::transport::Channel, GrpcInterceptor>;
