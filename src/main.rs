@@ -107,25 +107,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // we also shut down in case of error
         }
     }
-    // send shutdown signal to application and wait
-    tx.send(())?;
 
-    // // Wait for the tasks to finish.
-    // //
-    // // We drop our sender first because the recv() call otherwise
-    // // sleeps forever.
-    // drop(send);
-    drop(rx);
-    tx.closed().await;
+    let span = span!(Level::TRACE, "Shutting down tasks");
+    async {
+        // send shutdown signal to application and wait
+        tx.send(())?;
 
-    // When every sender has gone out of scope, the recv call
-    // will return with an error. We ignore the error.
-    // let _ = recv.recv().await;
+        // // Wait for the tasks to finish.
+        // //
+        // // We drop our sender first because the recv() call otherwise
+        // // sleeps forever.
+        // drop(send);
+        drop(rx);
+        tx.closed().await;
+
+        event!(Level::INFO, "All tasks shutdown.");
+
+        // When every sender has gone out of scope, the recv call
+        // will return with an error. We ignore the error.
+        // let _ = recv.recv().await;
+
+        Ok::<(), anyhow::Error>(())
+    }
+    // instrument the async block with the span...
+    .instrument(span)
+    // ...and await it.
+    .await?;
 
     // Shutdown trace pipeline
     opentelemetry::global::shutdown_tracer_provider();
 
-    println!("Tasks complete.");
+    println!("Shutdown complete!");
 
     Ok(())
 }
