@@ -47,6 +47,17 @@ pub async fn record_node_membership(
     Ok(etcd_clients.kv.put(kv_request).await?.into_inner())
 }
 
+/// Get all worker replica records from etcd
+#[tracing::instrument]
+pub async fn get_all_worker_records(kv_client: &mut KvClient) -> Result<RangeResponse> {
+    let range_request = tonic::Request::new(self::etcd::etcdserverpb::RangeRequest {
+        key: REPLICA_PREFIX.into(),
+        ..Default::default()
+    });
+
+    Ok(kv_client.range(range_request).await?.into_inner())
+}
+
 /// Etcd grpc api
 pub mod etcd {
     // reexports
