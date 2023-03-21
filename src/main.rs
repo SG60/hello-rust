@@ -10,7 +10,7 @@ use tracing::{event, span, Instrument, Level};
 use hello_rust_backend::do_some_stuff_with_etcd;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+async fn main() -> Result<()> {
     set_up_logging()?;
 
     // let (send, mut recv): (Sender<()>, _) = channel(1);
