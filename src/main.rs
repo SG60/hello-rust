@@ -1,6 +1,6 @@
 use anyhow::Result;
 use std::time::Duration;
-use tokio::signal;
+use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::watch;
 
 // tracing
@@ -81,7 +81,7 @@ async fn main() -> Result<()> {
                 break;
             };
         }
-        println!("Task shutting down. ({})", message);
+        event!(Level::INFO, "Task shutting down. ({})", message);
 
         // sender goes out of scope ...
     }
@@ -98,14 +98,22 @@ async fn main() -> Result<()> {
         rx.clone(),
     ));
 
-    match signal::ctrl_c().await {
-        Ok(()) => {
-            println!("Goodbye!");
         }
-        Err(err) => {
-            eprintln!("Unable to listen for shutdown signal: {}", err);
-            // we also shut down in case of error
+    let mut rx2 = rx.clone();
+    tokio::spawn(async move {
+        tokio::select! {
+            _ = loop_getting_cluster_members() => {},
+            _ = rx2.changed() => {
+                dbg!("rx shutdown channel changed");
+             }
         }
+    });
+
+    let mut sigterm_stream = signal(SignalKind::terminate())?;
+    let mut sigint_stream = signal(SignalKind::interrupt())?;
+    tokio::select! {
+        _ = sigterm_stream.recv() => {}
+        _ = sigint_stream.recv() => {}
     }
 
     let span = span!(Level::TRACE, "Shutting down tasks");
@@ -121,7 +129,7 @@ async fn main() -> Result<()> {
         drop(rx);
         tx.closed().await;
 
-        event!(Level::INFO, "All tasks shutdown.");
+        event!(Level::TRACE, "All tasks shutdown.");
 
         // When every sender has gone out of scope, the recv call
         // will return with an error. We ignore the error.
