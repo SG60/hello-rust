@@ -42,7 +42,7 @@ tracing-opentelemetry = "0.18.0"
 # Allows you to export data to OTEL collector
 # Requires protoc to be installed (protobuf compiler)
 opentelemetry-otlp = "0.11.0"
-tracing-subscriber = { version = "0.3.16", features = ["json"] }
+tracing-subscriber = { version = "0.3.16", features = ["json", "env-filter"] }
 tracing-serde = "0.1.3"
 # tokion console async debugger
 console-subscriber = { version = "0.1.8", optional = true }

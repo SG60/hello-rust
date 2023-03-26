@@ -8,15 +8,9 @@ use opentelemetry::{global, sdk::propagation::TraceContextPropagator};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_semantic_conventions as semcov;
 use tonic::{metadata::MetadataKey, service::Interceptor};
-use tracing::{Level, Span};
+use tracing::Span;
 use tracing_opentelemetry::OpenTelemetrySpanExt;
-use tracing_subscriber::{
-    filter::{LevelFilter, Targets},
-    fmt,
-    layer::SubscriberExt,
-    util::SubscriberInitExt,
-    Layer,
-};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Layer};
 
 use self::trace_output_fmt::JsonWithTraceId;
 
@@ -61,13 +55,14 @@ pub fn set_up_logging() -> Result<()> {
 
     let tracing_registry = tracing_subscriber::registry()
         // Add a filter to the layers so that they only observe the spans that I want
-        .with(
-            layers.with_filter(
-                Targets::new()
-                    .with_target("hello_rust_backend", Level::TRACE)
-                    .with_default(LevelFilter::INFO),
-            ),
-        );
+        .with(layers.with_filter(
+            // Parse env filter from RUST_LOG, setting a default directive if that fails.
+            // Syntax for directives is here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                EnvFilter::try_new("hello_rust_backend,warn")
+                    .expect("hard-coded default directive should be valid")
+            }),
+        ));
 
     #[cfg(feature = "tokio-console")]
     let tracing_registry = tracing_registry.with(console_subscriber::spawn());
