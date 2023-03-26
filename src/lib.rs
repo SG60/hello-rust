@@ -194,7 +194,7 @@ where
 }
 
 #[tracing::instrument]
-pub async fn do_some_stuff_with_etcd(etcd_endpoint: &str) -> cluster_management::Result<()> {
+pub async fn do_some_stuff_with_etcd(etcd_endpoint: &str) -> cluster_management::Result<EtcdClients> {
     event!(Level::INFO, "Initialising etcd grpc clients");
     let mut etcd_clients =
         do_with_retries(|| EtcdClients::connect(etcd_endpoint.to_owned())).await?;
@@ -213,7 +213,7 @@ pub async fn do_some_stuff_with_etcd(etcd_endpoint: &str) -> cluster_management:
         })?;
     event!(Level::DEBUG, "{:#?}", kv_response);
 
-    Ok(())
+    Ok(etcd_clients)
 }
 
 #[cfg(test)]
