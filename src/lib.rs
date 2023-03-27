@@ -1,7 +1,7 @@
 use std::future::Future;
 
 use serde::{Deserialize, Serialize};
-use tracing::{event, Level};
+use tracing::{event, span, Level};
 
 use cluster_management::etcd::{create_lease, lease_keep_alive, EtcdClients};
 
@@ -194,16 +194,28 @@ where
 }
 
 #[tracing::instrument]
-pub async fn do_some_stuff_with_etcd(etcd_endpoint: &str) -> cluster_management::Result<EtcdClients> {
+pub async fn do_some_stuff_with_etcd(
+    etcd_endpoint: &str,
+) -> cluster_management::Result<EtcdClients> {
     event!(Level::INFO, "Initialising etcd grpc clients");
     let mut etcd_clients =
         do_with_retries(|| EtcdClients::connect(etcd_endpoint.to_owned())).await?;
 
     let lease = create_lease(etcd_clients.lease.clone()).await?;
-    event!(Level::INFO, "current lease: {:#?}", lease.id);
+    event!(
+        Level::INFO,
+        etcd_lease_id = lease.id,
+        "current lease: {:#?}",
+        lease.id
+    );
 
-    let keep_alive_response = lease_keep_alive(etcd_clients.lease.clone(), lease.id).await?;
-    event!(Level::DEBUG, "{:#?}", keep_alive_response);
+    let span = span!(Level::INFO, "Starting lease_keep_alive task");
+    span.in_scope(|| {
+    let _result_of_tokio_task =
+        tokio::spawn(lease_keep_alive(etcd_clients.lease.clone(), lease.id));
+    dbg!(_result_of_tokio_task);
+    });
+
 
     let kv_response = cluster_management::record_node_membership(&mut etcd_clients, lease.id)
         .await
@@ -211,7 +223,6 @@ pub async fn do_some_stuff_with_etcd(etcd_endpoint: &str) -> cluster_management:
             event!(Level::ERROR, "{:#?}", e);
             e
         })?;
-    event!(Level::DEBUG, "{:#?}", kv_response);
 
     Ok(etcd_clients)
 }

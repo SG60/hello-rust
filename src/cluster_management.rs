@@ -96,6 +96,7 @@ pub async fn get_all_worker_records(kv_client: &mut KvClient) -> Result<RangeRes
 
 /// Etcd grpc api
 pub mod etcd {
+    use self::etcdserverpb::LeaseKeepAliveResponse;
     // reexports
     pub use self::etcdserverpb::{
         kv_client, lease_client, LeaseGrantRequest, LeaseGrantResponse, LeaseKeepAliveRequest,
@@ -103,12 +104,15 @@ pub mod etcd {
     };
 
     use std::env::VarError;
+    use std::time::Duration;
     use thiserror::Error;
     use tokio::sync::mpsc::channel;
     use tokio::sync::mpsc::Sender;
+    use tokio::time::Instant;
     use tokio_stream::wrappers::ReceiverStream;
     use tonic::transport::Endpoint;
-    use tracing::{event, Level};
+    use tonic::Streaming;
+    use tracing::{event, span, Instrument, Level};
 
     use crate::tracing_utils::GrpcInterceptor;
     use crate::tracing_utils::InterceptedGrpcService;
@@ -147,6 +151,8 @@ pub mod etcd {
         Transport(#[from] tonic::transport::Error),
         #[error("failed to create watch")]
         CreateWatch,
+        #[error("error refreshing lease")]
+        RefreshLease,
     }
 
     pub type KvClient = kv_client::KvClient<InterceptedGrpcService>;
@@ -176,43 +182,145 @@ pub mod etcd {
         Ok(response.into_inner())
     }
 
-    #[tracing::instrument]
+    struct RefreshLeaseOnceResponse {
+        ttl_in_seconds: i64,
+    }
+    #[tracing::instrument(level = "debug")]
+    async fn refresh_lease_once(
+        request_sender: &Sender<LeaseKeepAliveRequest>,
+        response_receiver: &mut tonic::Streaming<LeaseKeepAliveResponse>,
+        lease_id: i64,
+    ) -> Result<RefreshLeaseOnceResponse> {
+        send_lease_keep_alive_request(&request_sender, lease_id).await?;
+
+        event!(Level::INFO, lease_id, "trying to keep the lease alive");
+
+        let lease_ttl;
+        // wait for response on channel (confirming the lease refresh)
+        if let Some(response) = response_receiver.message().await? {
+            event!(Level::INFO, lease_ttl = response.ttl, "refreshed lease");
+            lease_ttl = response.ttl;
+        } else {
+            return Err(Error::RefreshLease);
+        };
+        Ok(RefreshLeaseOnceResponse {
+            ttl_in_seconds: lease_ttl,
+        })
+    }
+
+    #[tracing::instrument(level = "debug")]
+    async fn send_lease_keep_alive_request(
+        request_sender: &Sender<LeaseKeepAliveRequest>,
+        lease_id: i64,
+    ) -> Result<()> {
+        request_sender
+            .send(LeaseKeepAliveRequest { id: lease_id })
+            .await
+            .map_err(|_| Error::ChannelClosed)
+    }
+
+    struct LeaseLivenessKeeper {
+        request_sender: Sender<LeaseKeepAliveRequest>,
+        response_receiver: Streaming<LeaseKeepAliveResponse>,
+        lease_id: i64,
+    }
+    impl LeaseLivenessKeeper {
+        /// send a keep alive request to etcd
+        async fn keep_alive(&mut self) -> Result<RefreshLeaseOnceResponse> {
+            refresh_lease_once(
+                &self.request_sender,
+                &mut self.response_receiver,
+                self.lease_id,
+            )
+            .await
+        }
+
+        #[tracing::instrument]
+        async fn initialise_lease_keep_alive(
+            mut lease_client: LeaseClient,
+            lease_id: i64,
+        ) -> Result<LeaseLivenessKeeper> {
+            event!(Level::DEBUG, "creating channel and ReceiverStream");
+            let (req_sender, req_receiver) = channel::<LeaseKeepAliveRequest>(1024);
+            send_lease_keep_alive_request(&req_sender, lease_id).await?;
+
+            let req_receiver = ReceiverStream::new(req_receiver);
+
+            println!("______________________let response_receiver_________________");
+            let response_receiver_result = lease_client
+                .lease_keep_alive(req_receiver)
+                .instrument(span!(
+                    Level::DEBUG,
+                    "set up response receiver for lease refreshing"
+                ))
+                .await;
+            println!("_______________________response_receiver_future got!_______________");
+            dbg!(&response_receiver_result);
+            let response_receiver: tonic::Streaming<etcdserverpb::LeaseKeepAliveResponse> =
+                response_receiver_result?.into_inner();
+
+            Ok(LeaseLivenessKeeper {
+                lease_id,
+                request_sender: req_sender,
+                response_receiver,
+            })
+        }
+    }
+
     pub async fn lease_keep_alive(
-        mut lease_client: LeaseClient,
+        lease_client: LeaseClient,
         lease_id: i64,
     ) -> Result<LeaseKeepAlive> {
-        event!(Level::INFO, "trying to keep the lease alive");
+        println!("______________________Keep the lease alive!!!_________________");
 
-        let (req_sender, req_receiver) = channel(1024);
-        let req_receiver = ReceiverStream::new(req_receiver);
+        let mut lease_liveness_keeper =
+            LeaseLivenessKeeper::initialise_lease_keep_alive(lease_client, lease_id).await?;
 
-        let initial_lease_request = LeaseKeepAliveRequest { id: lease_id };
+        let ttl_desired_preemption = 10;
+        let span = span!(Level::TRACE, "test spannnnn");
+        let _enter = span.enter();
 
-        event!(Level::INFO, "lease_id: {}", lease_id);
+        println!("______________________just before the lease loop starts_________________");
 
-        req_sender
-            .send(initial_lease_request)
-            .await
-            .map_err(|_| Error::ChannelClosed)?;
+        loop {
+            async {
+                let instant_before_request = Instant::now();
 
-        let mut response_receiver: tonic::Streaming<etcdserverpb::LeaseKeepAliveResponse> =
-            lease_client
-                .lease_keep_alive(req_receiver)
-                .await?
-                .into_inner();
+                let RefreshLeaseOnceResponse { ttl_in_seconds } =
+                    lease_liveness_keeper.keep_alive().await?;
 
-        let lease_id = match response_receiver.message().await? {
-            Some(resp) => resp.id,
-            None => {
-                return Err(Error::CreateWatch);
+                let time_to_wait_before_renewal = if ttl_in_seconds <= ttl_desired_preemption {
+                    ttl_in_seconds / 2
+                } else {
+                    ttl_in_seconds - ttl_desired_preemption
+                };
+
+                event!(
+                    Level::INFO,
+                    lease_ttl = ttl_in_seconds,
+                    time_to_wait_before_renewal,
+                    lease_id,
+                    "lease renewal details"
+                );
+
+                println!("_______________________________________");
+                println!("sleeping until next lease refresh: {time_to_wait_before_renewal}");
+
+                tokio::time::sleep_until(
+                    instant_before_request
+                        + Duration::from_secs(
+                            time_to_wait_before_renewal
+                                .try_into()
+                                .expect("should be a positive integer"),
+                        ),
+                )
+                .instrument(span!(Level::DEBUG, "sleep"))
+                .await;
+                Ok::<_, Error>(())
             }
-        };
-
-        Ok(LeaseKeepAlive {
-            id: lease_id,
-            request_sender: req_sender,
-            response_stream: response_receiver,
-        })
+            .instrument(span!(Level::INFO, "refresh lease"))
+            .await?;
+        }
     }
 
     /// Calculate the correct range_end prefix (prefix + 1)
