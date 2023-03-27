@@ -94,13 +94,13 @@ async fn main() -> Result<()> {
 
     let _op1 = tokio::spawn(some_operation(
         "Hello World!",
-        Duration::from_secs(10),
+        Duration::from_secs(40),
         rx.clone(),
     ));
 
     let _op2 = tokio::spawn(some_operation(
         "hello world from a shorter loop!",
-        Duration::from_secs(7),
+        Duration::from_secs(30),
         rx.clone(),
     ));
 
