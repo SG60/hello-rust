@@ -3,7 +3,7 @@
 
 use once_cell::sync::Lazy;
 use thiserror::Error;
-use tracing::{event, span, Instrument, Level};
+use tracing::{event, Level};
 
 use crate::do_with_retries;
 
@@ -241,7 +241,7 @@ pub mod etcd {
         response_receiver: &mut tonic::Streaming<LeaseKeepAliveResponse>,
         lease_id: i64,
     ) -> Result<RefreshLeaseOnceResponse> {
-        send_lease_keep_alive_request(&request_sender, lease_id).await?;
+        send_lease_keep_alive_request(request_sender, lease_id).await?;
 
         event!(Level::INFO, lease_id, "trying to keep the lease alive");
 

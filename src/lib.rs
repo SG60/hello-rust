@@ -1,9 +1,9 @@
 use std::future::Future;
 
 use serde::{Deserialize, Serialize};
-use tracing::{event, span, Level};
+use tracing::{event, Level};
 
-use cluster_management::etcd::{create_lease, lease_keep_alive, EtcdClients};
+use cluster_management::etcd::EtcdClients;
 
 pub mod aws;
 pub mod cluster_management;
