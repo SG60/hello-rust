@@ -1,6 +1,6 @@
 [package]
 name = "hello-rust-backend"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 license = "GPL-3.0-or-later"
 default-run = "hello-rust-backend"
@@ -42,7 +42,7 @@ tracing-opentelemetry = "0.18.0"
 # Allows you to export data to OTEL collector
 # Requires protoc to be installed (protobuf compiler)
 opentelemetry-otlp = "0.11.0"
-tracing-subscriber = { version = "0.3.16", features = ["json"] }
+tracing-subscriber = { version = "0.3.16", features = ["json", "env-filter"] }
 tracing-serde = "0.1.3"
 # tokion console async debugger
 console-subscriber = { version = "0.1.8", optional = true }
@@ -50,6 +50,7 @@ console-subscriber = { version = "0.1.8", optional = true }
 # GRPC (used for connecting to etcd)
 tonic = "0.8.3"
 prost = "0.11.8"
+once_cell = "1.17.1"
 
 [build-dependencies]
 # compile .proto files into an api

@@ -3,7 +3,7 @@ use std::future::Future;
 use serde::{Deserialize, Serialize};
 use tracing::{event, Level};
 
-use cluster_management::etcd::{self, create_lease, lease_keep_alive, EtcdClients, PutRequest};
+use cluster_management::etcd::EtcdClients;
 
 pub mod aws;
 pub mod cluster_management;
@@ -164,7 +164,7 @@ pub async fn get_some_data_from_google_calendar(
     Ok(res)
 }
 
-pub async fn do_with_retries<A, Fut, E, F: Fn() -> Fut>(f: F) -> Result<A, E>
+pub async fn do_with_retries<A, Fut, E, F: Fn() -> Fut>(f: F) -> A
 where
     E: std::error::Error,
     Fut: Future<Output = Result<A, E>>,
@@ -188,38 +188,24 @@ where
                     retry_wait_seconds += retry_wait_seconds
                 };
             }
-            Ok(result) => break Ok(result),
+            Ok(result) => break result,
         }
     }
 }
 
 #[tracing::instrument]
-pub async fn do_some_stuff_with_etcd(etcd_endpoint: &str) -> etcd::Result<()> {
+pub async fn do_some_stuff_with_etcd(
+    etcd_endpoint: &str,
+) -> cluster_management::Result<EtcdClients> {
     event!(Level::INFO, "Initialising etcd grpc clients");
-    let etcd_clients = do_with_retries(|| EtcdClients::connect(etcd_endpoint.to_owned())).await?;
-    // let lease_client = do_with_retries(|| <Channel>make_lease_client(etcd_endpoint.to_owned())).await?;
-    let lease_client = etcd_clients.lease;
-    let mut kv_client = etcd_clients.kv;
+    let etcd_clients = do_with_retries(|| EtcdClients::connect(etcd_endpoint.to_owned())).await;
 
-    let lease = create_lease(lease_client.to_owned()).await?;
-    event!(Level::INFO, "current lease: {:#?}", lease.id);
+    let _result_of_tokio_task = tokio::spawn(cluster_management::manage_cluster_node_membership(
+        etcd_clients.clone(),
+    ));
+    dbg!(_result_of_tokio_task);
 
-    let _keep_alive_response = lease_keep_alive(lease_client, lease.id).await?;
-
-    let hostname = std::env::var("HOSTNAME")?;
-    let kv_request = tonic::Request::new(PutRequest {
-        key: format!("{}{}", cluster_management::REPLICA_PREFIX, hostname).into(),
-        value: "replica".into(),
-        ..Default::default()
-    });
-
-    let kv_response = kv_client.put(kv_request).await?;
-
-    let kv_response_inner = kv_response.into_inner();
-
-    event!(Level::DEBUG, "{:#?}", kv_response_inner);
-
-    Ok(())
+    Ok(etcd_clients)
 }
 
 #[cfg(test)]
