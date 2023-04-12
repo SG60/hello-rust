@@ -164,7 +164,7 @@ pub async fn get_some_data_from_google_calendar(
     Ok(res)
 }
 
-pub async fn do_with_retries<A, Fut, E, F: Fn() -> Fut>(f: F) -> Result<A, E>
+pub async fn do_with_retries<A, Fut, E, F: Fn() -> Fut>(f: F) -> A
 where
     E: std::error::Error,
     Fut: Future<Output = Result<A, E>>,
@@ -188,7 +188,7 @@ where
                     retry_wait_seconds += retry_wait_seconds
                 };
             }
-            Ok(result) => break Ok(result),
+            Ok(result) => break result,
         }
     }
 }
@@ -198,31 +198,12 @@ pub async fn do_some_stuff_with_etcd(
     etcd_endpoint: &str,
 ) -> cluster_management::Result<EtcdClients> {
     event!(Level::INFO, "Initialising etcd grpc clients");
-    let mut etcd_clients =
-        do_with_retries(|| EtcdClients::connect(etcd_endpoint.to_owned())).await?;
+    let etcd_clients = do_with_retries(|| EtcdClients::connect(etcd_endpoint.to_owned())).await;
 
-    let lease = create_lease(etcd_clients.lease.clone()).await?;
-    event!(
-        Level::INFO,
-        etcd_lease_id = lease.id,
-        "current lease: {:#?}",
-        lease.id
-    );
-
-    let span = span!(Level::INFO, "Starting lease_keep_alive task");
-    span.in_scope(|| {
-    let _result_of_tokio_task =
-        tokio::spawn(lease_keep_alive(etcd_clients.lease.clone(), lease.id));
+    let _result_of_tokio_task = tokio::spawn(cluster_management::manage_cluster_node_membership(
+        etcd_clients.clone(),
+    ));
     dbg!(_result_of_tokio_task);
-    });
-
-
-    let kv_response = cluster_management::record_node_membership(&mut etcd_clients, lease.id)
-        .await
-        .map_err(|e| {
-            event!(Level::ERROR, "{:#?}", e);
-            e
-        })?;
 
     Ok(etcd_clients)
 }

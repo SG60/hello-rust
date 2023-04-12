@@ -3,7 +3,9 @@
 
 use once_cell::sync::Lazy;
 use thiserror::Error;
-use tracing::{event, Level};
+use tracing::{event, span, Instrument, Level};
+
+use crate::do_with_retries;
 
 use self::etcd::{
     etcdserverpb::{PutResponse, RangeResponse},
@@ -30,6 +32,54 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Get an env var but record what its name was if it is missing
 fn get_env_var(key: &str) -> Result<String> {
     std::env::var(key).or(Err(Error::EnvVar(key.into())))
+}
+
+/// Manage cluster membership recording
+///
+/// Uses [record_node_membership] and various lease functions.
+///
+/// Doesn't return a result, so that it can run nicely in a separate tokio task. Will just retry
+/// the whole thing if any part fails.
+pub async fn manage_cluster_node_membership(mut etcd_clients: EtcdClients) {
+    loop {
+        let mut lease = Default::default();
+        let result = async {
+            lease = do_with_retries(|| etcd::create_lease(etcd_clients.lease.clone())).await;
+
+            event!(
+                Level::INFO,
+                etcd_lease_id = lease.id,
+                "current lease: {:#?}",
+                lease.id
+            );
+
+            record_node_membership(&mut etcd_clients, lease.id)
+                .await
+                .map_err(|e| {
+                    event!(Level::ERROR, "{:#?}", e);
+                    e
+                })?;
+
+            Ok::<_, Error>(())
+        }
+        .await;
+
+        match result {
+            Ok(_) => {
+                let _ = etcd::lease_keep_alive(etcd_clients.lease.clone(), lease.id).await;
+            }
+            Err(e) => {
+                event!(
+                    Level::ERROR,
+                    "Error initialising cluster membership, will try again. Error: {e:#?}"
+                );
+            }
+        };
+
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+        let _result = etcd::lease_keep_alive(etcd_clients.lease.clone(), lease.id).await;
+    }
 }
 
 /// Records node membership of the cluster of workers. This communicates with etcd and uses the
@@ -157,7 +207,7 @@ pub mod etcd {
 
     pub type KvClient = kv_client::KvClient<InterceptedGrpcService>;
     pub type LeaseClient = lease_client::LeaseClient<InterceptedGrpcService>;
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     pub struct EtcdClients {
         pub kv: KvClient,
         pub lease: LeaseClient,
@@ -267,10 +317,9 @@ pub mod etcd {
         }
     }
 
-    pub async fn lease_keep_alive(
-        lease_client: LeaseClient,
-        lease_id: i64,
-    ) -> Result<LeaseKeepAlive> {
+    /// loop, refreshing lease before it expires
+    /// Shouldn't ever return unless there is an error.
+    pub async fn lease_keep_alive(lease_client: LeaseClient, lease_id: i64) -> Result<()> {
         println!("______________________Keep the lease alive!!!_________________");
 
         let mut lease_liveness_keeper =
