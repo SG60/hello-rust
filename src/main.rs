@@ -108,9 +108,7 @@ async fn main() -> Result<()> {
         loop {
             async {
                 let list = get_all_worker_records(&mut etcd_clients.kv).await;
-                event!(Level::INFO, "range response: {:#?}", list);
                 if let Ok(list) = list {
-                    event!(Level::INFO, "kvs list: {:#?}", list.kvs);
                     let mapped_kv: Vec<_> = list
                         .kvs
                         .iter()

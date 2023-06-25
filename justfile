@@ -75,7 +75,7 @@ docker-with-cleanup just-cmd-and-container-name="etcd":
   set -x
   docker stop {{just-cmd-and-container-name}}; docker rm -v {{just-cmd-and-container-name}}
 
-backend_etcd_related_env := 'HOSTNAME=replica12345 APP_ETCD_URL=http://localhost:2379'
+backend_etcd_related_env := "HOSTNAME=" + uuid() + " APP_ETCD_URL=http://localhost:2379"
 
 # Run against local etcd
 run-with-etcd:
