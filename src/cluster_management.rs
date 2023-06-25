@@ -3,7 +3,7 @@
 
 use once_cell::sync::Lazy;
 use thiserror::Error;
-use tracing::{event, Level};
+use tracing::{event, span, Instrument, Level};
 
 use crate::do_with_retries;
 
@@ -62,11 +62,21 @@ pub async fn manage_cluster_node_membership(mut etcd_clients: EtcdClients) {
 
             Ok::<_, Error>(())
         }
+        .instrument(span!(
+            Level::INFO,
+            "initialise lease for cluster membership"
+        ))
         .await;
 
         match result {
             Ok(_) => {
-                let _ = etcd::lease_keep_alive(etcd_clients.lease.clone(), lease.id).await;
+                // TODO: take in the shutdown signal channel, then stop [etcd::lease_keep_alive] and switch
+                // to a task that revokes the etcd lease for a clean shutdown.
+                let result = etcd::lease_keep_alive(etcd_clients.lease.clone(), lease.id).await;
+
+                if let Err(_) = result {
+                    println!("Error with lease_keep_alive, will create a new lease")
+                };
             }
             Err(e) => {
                 event!(
@@ -77,8 +87,6 @@ pub async fn manage_cluster_node_membership(mut etcd_clients: EtcdClients) {
         };
 
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-
-        let _result = etcd::lease_keep_alive(etcd_clients.lease.clone(), lease.id).await;
     }
 }
 
@@ -138,8 +146,6 @@ pub async fn get_all_worker_records(kv_client: &mut KvClient) -> Result<RangeRes
         range_end: range_end.into(),
         ..Default::default()
     });
-
-    event!(Level::DEBUG, "range_request: {:#?}", range_request);
 
     Ok(kv_client.range(range_request).await?.into_inner())
 }
@@ -203,6 +209,8 @@ pub mod etcd {
         CreateWatch,
         #[error("error refreshing lease")]
         RefreshLease,
+        #[error("error refreshing lease")]
+        LeaseExpired,
     }
 
     pub type KvClient = kv_client::KvClient<InterceptedGrpcService>;
@@ -232,6 +240,7 @@ pub mod etcd {
         Ok(response.into_inner())
     }
 
+    #[derive(Debug, Clone)]
     struct RefreshLeaseOnceResponse {
         ttl_in_seconds: i64,
     }
@@ -248,14 +257,18 @@ pub mod etcd {
         let lease_ttl;
         // wait for response on channel (confirming the lease refresh)
         if let Some(response) = response_receiver.message().await? {
-            event!(Level::INFO, lease_ttl = response.ttl, "refreshed lease");
             lease_ttl = response.ttl;
+            if lease_ttl > 0 {
+                event!(Level::INFO, lease_ttl, "refreshed lease");
+                Ok(RefreshLeaseOnceResponse {
+                    ttl_in_seconds: lease_ttl,
+                })
+            } else {
+                Err(Error::LeaseExpired)
+            }
         } else {
-            return Err(Error::RefreshLease);
-        };
-        Ok(RefreshLeaseOnceResponse {
-            ttl_in_seconds: lease_ttl,
-        })
+            Err(Error::RefreshLease)
+        }
     }
 
     #[tracing::instrument(level = "debug")]
@@ -269,6 +282,7 @@ pub mod etcd {
             .map_err(|_| Error::ChannelClosed)
     }
 
+    #[derive(Debug)]
     struct LeaseLivenessKeeper {
         request_sender: Sender<LeaseKeepAliveRequest>,
         response_receiver: Streaming<LeaseKeepAliveResponse>,
@@ -305,7 +319,6 @@ pub mod etcd {
                 ))
                 .await;
             println!("_______________________response_receiver_future got!_______________");
-            dbg!(&response_receiver_result);
             let response_receiver: tonic::Streaming<etcdserverpb::LeaseKeepAliveResponse> =
                 response_receiver_result?.into_inner();
 
@@ -323,7 +336,8 @@ pub mod etcd {
         println!("______________________Keep the lease alive!!!_________________");
 
         let mut lease_liveness_keeper =
-            LeaseLivenessKeeper::initialise_lease_keep_alive(lease_client, lease_id).await?;
+            LeaseLivenessKeeper::initialise_lease_keep_alive(lease_client.clone(), lease_id)
+                .await?;
 
         let ttl_desired_preemption = 10;
         let span = span!(Level::TRACE, "test spannnnn");
@@ -333,10 +347,17 @@ pub mod etcd {
 
         loop {
             async {
+                println!("----------------------------- lease refresh beginning -------------");
+
                 let instant_before_request = Instant::now();
 
-                let RefreshLeaseOnceResponse { ttl_in_seconds } =
-                    lease_liveness_keeper.keep_alive().await?;
+                let lease_refresh_response =
+                    lease_liveness_keeper.keep_alive().await.map_err(|e| {
+                        event!(Level::ERROR, "Error refreshing cluster membership lease");
+                        e
+                    })?;
+
+                let ttl_in_seconds = lease_refresh_response.ttl_in_seconds;
 
                 let time_to_wait_before_renewal = if ttl_in_seconds <= ttl_desired_preemption {
                     ttl_in_seconds / 2
