@@ -21,3 +21,4 @@ oauthtokencache.json
 *.tfstate
 *.tfstate.*
 
+.direnv
