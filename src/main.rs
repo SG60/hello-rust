@@ -26,8 +26,7 @@ async fn main() -> Result<()> {
         let settings_map = hello_rust_backend::settings::get_settings();
         match settings_map {
             Err(error) => {
-                println!("Error obtaining settings");
-                println!("{:#?}", error);
+                event!(Level::ERROR, "Error obtaining settings: {}", error);
                 tokio::time::sleep(Duration::from_secs(retry_wait_seconds)).await;
                 if retry_wait_seconds < 300 {
                     retry_wait_seconds += retry_wait_seconds
