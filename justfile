@@ -19,8 +19,8 @@ lint:
     cargo clippy
 
 # watch (default to running test)
-watch +COMMAND='test':
-    cargo watch --clear --exec "{{COMMAND}}"
+watch COMMAND='test':
+    cargo watch --clear --exec {{COMMAND}}
 
 test *FLAGS:
   cargo test -- {{FLAGS}}
@@ -80,6 +80,9 @@ backend_etcd_related_env := "HOSTNAME=" + uuid() + " APP_ETCD_URL=http://localho
 # Run against local etcd
 run-with-etcd:
   {{backend_etcd_related_env}} just run
+
+dev $RUST_LOG="hello_rust_backend=debug":
+  cargo watch -s "just run-with-etcd"
 
 run-with-etcd-and-otlp:
   {{backend_etcd_related_env}} cargo run
