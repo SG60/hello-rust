@@ -59,8 +59,8 @@ pub fn set_up_logging() -> Result<()> {
             // Parse env filter from RUST_LOG, setting a default directive if that fails.
             // Syntax for directives is here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
             EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                EnvFilter::try_new("hello_rust_backend,warn")
-                    .expect("hard-coded default directive should be valid")
+                // e.g. "RUST_LOG=hello_rust_backend,warn" would do everything from hello_rust_backend, and only "warn" level or higher from elsewhere
+                EnvFilter::try_new("info").expect("hard-coded default directive should be valid")
             }),
         ));
 
