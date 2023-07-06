@@ -74,7 +74,7 @@ pub async fn manage_cluster_node_membership(mut etcd_clients: EtcdClients) {
                 // to a task that revokes the etcd lease for a clean shutdown.
                 let result = etcd::lease_keep_alive(etcd_clients.lease.clone(), lease.id).await;
 
-                if let Err(_) = result {
+                if result.is_err() {
                     println!("Error with lease_keep_alive, will create a new lease")
                 };
             }
