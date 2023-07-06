@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 use thiserror::Error;
 use tracing::{event, span, Instrument, Level};
 
-use crate::do_with_retries;
+use crate::{do_with_retries, etcd};
 
 use crate::etcd::{
     etcdserverpb::{PutResponse, RangeResponse},
@@ -137,4 +137,52 @@ pub async fn get_all_worker_records(kv_client: &mut KvClient) -> Result<RangeRes
     });
 
     Ok(kv_client.range(range_request).await?.into_inner())
+}
+
+/// Create a KV record in etcd to represent a worker lock for this worker
+pub async fn create_a_sync_lock_record(
+    kv_client: &mut KvClient,
+    current_lease: i64,
+    worker_id: String,
+    lock_key: &str,
+) -> Result<()> {
+    // let result = kv_client
+    //     .put(etcd::PutRequest {
+    //         key: lock_key.into(),
+    //         value: worker_id.clone().into(),
+    //         lease: current_lease,
+    //         prev_kv: false,
+    //         ignore_value: false,
+    //         ignore_lease: false,
+    //     })
+    //     .await?;
+    //
+    // dbg!(result);
+
+    let result = kv_client
+        .txn(etcd::TxnRequest {
+            compare: vec![etcd::Compare {
+                result: etcd::compare::CompareResult::Equal.into(),
+                key: lock_key.into(),
+                range_end: lock_key.into(),
+                target: etcd::compare::CompareTarget::Version.into(),
+                target_union: Some(etcd::compare::TargetUnion::Version(0)),
+            }],
+            success: vec![etcd::RequestOp {
+                request: Some(etcd::request_op::Request::RequestPut(etcd::PutRequest {
+                    key: lock_key.into(),
+                    value: worker_id.into(),
+                    lease: current_lease,
+                    prev_kv: false,
+                    ignore_value: false,
+                    ignore_lease: false,
+                })),
+            }],
+            failure: vec![],
+        })
+        .await?;
+
+    dbg!(result);
+
+    unimplemented!()
 }
