@@ -3,10 +3,11 @@ use std::future::Future;
 use serde::{Deserialize, Serialize};
 use tracing::{event, Level};
 
-use cluster_management::etcd::EtcdClients;
+use crate::etcd::EtcdClients;
 
 pub mod aws;
 pub mod cluster_management;
+pub mod etcd;
 pub mod notion_api;
 pub mod settings;
 pub mod tracing_utils;

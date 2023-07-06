@@ -1,5 +1,5 @@
 use anyhow::Result;
-use hello_rust_backend::cluster_management::etcd::EtcdClients;
+use hello_rust_backend::etcd::EtcdClients;
 use std::time::Duration;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::watch;
