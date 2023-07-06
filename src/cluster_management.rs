@@ -332,7 +332,10 @@ pub mod etcd {
 
     /// loop, refreshing lease before it expires
     /// Shouldn't ever return unless there is an error.
-    pub async fn lease_keep_alive(lease_client: LeaseClient, lease_id: i64) -> Result<()> {
+    pub async fn lease_keep_alive(
+        lease_client: LeaseClient,
+        lease_id: i64,
+    ) -> Result<std::convert::Infallible> {
         println!("______________________Keep the lease alive!!!_________________");
 
         let mut lease_liveness_keeper =
