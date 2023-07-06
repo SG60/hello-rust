@@ -111,14 +111,9 @@ async fn main() -> Result<()> {
                     let mapped_kv: Vec<_> = list
                         .kvs
                         .iter()
-                        .map(|element| {
-                            (
-                                std::str::from_utf8(&element.key),
-                                std::str::from_utf8(&element.value),
-                            )
-                        })
+                        .map(|element| std::str::from_utf8(&element.key))
                         .collect();
-                    event!(Level::INFO, "kvs strings: {:#?}", mapped_kv);
+                    event!(Level::DEBUG, "kvs strings: {:#?}", mapped_kv);
                 }
 
                 let count = get_current_cluster_members_count(&mut etcd_clients.kv).await;

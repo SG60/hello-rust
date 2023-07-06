@@ -114,14 +114,8 @@ pub async fn record_node_membership(
 #[tracing::instrument]
 pub async fn get_current_cluster_members_count(kv_client: &mut KvClient) -> Result<i64> {
     let range_end: String = REPLICA_PREFIX_RANGE_END.to_string();
-    event!(
-        Level::DEBUG,
-        "request range: {} to {}",
-        REPLICA_PREFIX,
-        range_end
-    );
 
-    let range_request = tonic::Request::new(self::etcd::etcdserverpb::RangeRequest {
+    let range_request = tonic::Request::new(crate::etcd::etcdserverpb::RangeRequest {
         key: REPLICA_PREFIX.into(),
         range_end: range_end.into(),
         count_only: true,
@@ -135,14 +129,8 @@ pub async fn get_current_cluster_members_count(kv_client: &mut KvClient) -> Resu
 #[tracing::instrument]
 pub async fn get_all_worker_records(kv_client: &mut KvClient) -> Result<RangeResponse> {
     let range_end: String = REPLICA_PREFIX_RANGE_END.to_string();
-    event!(
-        Level::DEBUG,
-        "request range: {} to {}",
-        REPLICA_PREFIX,
-        range_end
-    );
 
-    let range_request = tonic::Request::new(self::etcd::etcdserverpb::RangeRequest {
+    let range_request = tonic::Request::new(crate::etcd::etcdserverpb::RangeRequest {
         key: REPLICA_PREFIX.into(),
         range_end: range_end.into(),
         ..Default::default()
