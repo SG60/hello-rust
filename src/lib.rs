@@ -197,12 +197,14 @@ where
 #[tracing::instrument]
 pub async fn do_some_stuff_with_etcd(
     etcd_endpoint: &str,
+    node_name: &str,
 ) -> cluster_management::Result<EtcdClients> {
     event!(Level::INFO, "Initialising etcd grpc clients");
     let etcd_clients = do_with_retries(|| EtcdClients::connect(etcd_endpoint.to_owned())).await;
 
     let _result_of_tokio_task = tokio::spawn(cluster_management::manage_cluster_node_membership(
         etcd_clients.clone(),
+        node_name.to_owned(),
     ));
     dbg!(_result_of_tokio_task);
 

@@ -29,18 +29,13 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Get an env var but record what its name was if it is missing
-fn get_env_var(key: &str) -> Result<String> {
-    std::env::var(key).or(Err(Error::EnvVar(key.into())))
-}
-
 /// Manage cluster membership recording
 ///
 /// Uses [record_node_membership] and various lease functions.
 ///
 /// Doesn't return a result, so that it can run nicely in a separate tokio task. Will just retry
 /// the whole thing if any part fails.
-pub async fn manage_cluster_node_membership(mut etcd_clients: EtcdClients) {
+pub async fn manage_cluster_node_membership(mut etcd_clients: EtcdClients, node_name: String) {
     loop {
         let mut lease = Default::default();
         let result = async {
@@ -53,7 +48,7 @@ pub async fn manage_cluster_node_membership(mut etcd_clients: EtcdClients) {
                 lease.id
             );
 
-            record_node_membership(&mut etcd_clients, lease.id)
+            record_node_membership(&mut etcd_clients, lease.id, node_name.clone())
                 .await
                 .map_err(|e| {
                     event!(Level::ERROR, "{:#?}", e);
@@ -97,8 +92,9 @@ pub async fn manage_cluster_node_membership(mut etcd_clients: EtcdClients) {
 pub async fn record_node_membership(
     etcd_clients: &mut EtcdClients,
     lease: i64,
+    node_name: String
 ) -> Result<PutResponse> {
-    let hostname = get_env_var("HOSTNAME")?;
+    let hostname = node_name;
 
     let kv_request = tonic::Request::new(crate::etcd::PutRequest {
         key: format!("{}{}", REPLICA_PREFIX, hostname).into(),

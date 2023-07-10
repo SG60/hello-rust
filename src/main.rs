@@ -43,6 +43,9 @@ async fn main() -> Result<()> {
         .as_str());
 
     let span = span!(Level::TRACE, "talk to etcd");
+
+    let node_name = std::env::var("HOSTNAME")?;
+
     let etcd_clients = async {
         // This is correct! If we yield here, the span will be exited,
         // and re-entered when we resume.
@@ -51,9 +54,11 @@ async fn main() -> Result<()> {
 
             event!(Level::INFO, "Clustered setting: {}", settings_map.clustered);
 
-            let result =
-                do_some_stuff_with_etcd(&settings_map.etcd_url.expect("should be valid string"))
-                    .await;
+            let result = do_some_stuff_with_etcd(
+                &settings_map.etcd_url.expect("should be valid string"),
+                node_name.as_str(),
+            )
+            .await;
 
             match result {
                 Ok(ref result) => {
@@ -103,7 +108,7 @@ async fn main() -> Result<()> {
         rx.clone(),
     ));
 
-    async fn loop_getting_cluster_members(mut etcd_clients: EtcdClients) {
+    async fn loop_getting_cluster_members(mut etcd_clients: EtcdClients, node_name: &str) {
         loop {
             async {
                 let list = get_all_worker_records(&mut etcd_clients.kv).await;
@@ -139,7 +144,7 @@ async fn main() -> Result<()> {
         let mut rx2 = rx.clone();
         tokio::spawn(async move {
             tokio::select! {
-                _ = loop_getting_cluster_members(etcd_clients) => {},
+                _ = loop_getting_cluster_members(etcd_clients, &node_name) => {},
                 _ = rx2.changed() => {
                     dbg!("rx shutdown channel changed");
                  }
