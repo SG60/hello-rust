@@ -9,7 +9,7 @@ use hello_rust_backend::tracing_utils::set_up_logging;
 use tracing::{event, span, Instrument, Level};
 
 use hello_rust_backend::cluster_management::{
-    get_all_worker_records, get_current_cluster_members_count,
+    create_a_sync_lock_record, get_all_worker_records, get_current_cluster_members_count,
 };
 use hello_rust_backend::do_some_stuff_with_etcd;
 
@@ -116,22 +116,62 @@ async fn main() -> Result<()> {
                     let mapped_kv: Vec<_> = list
                         .kvs
                         .iter()
-                        .map(|element| std::str::from_utf8(&element.key))
+                        .map(|element| {
+                            std::str::from_utf8(&element.key)
+                                .expect("Should be valid utf8")
+                                .strip_prefix("/nodes/")
+                                .expect("should be formatted with /nodes/ at start")
+                        })
                         .collect();
-                    event!(Level::DEBUG, "kvs strings: {:#?}", mapped_kv);
-                }
 
-                let count = get_current_cluster_members_count(&mut etcd_clients.kv).await;
-                count.map_or_else(
-                    |error| event!(Level::ERROR, "error getting workers count: {:#?}", error),
-                    |count| {
-                        event!(
-                            Level::INFO,
-                            workers_count = count,
-                            "clustered workers found"
-                        )
-                    },
-                );
+                    let current_worker_index = mapped_kv.iter().position(|x| *x == node_name);
+                    let workers_count = list.count;
+
+                    // This should be equal to the total number of sync partitions in DynamoDB.
+                    // Perhaps there should be a way to calculate this automatically?! For now it
+                    // is fine as a compile time constant.
+                    let total_number_of_sync_partitions = 21;
+
+                    let sync_records_to_claim: Option<Vec<usize>> =
+                        current_worker_index.map(|current_worker_index| {
+                            ((current_worker_index)..total_number_of_sync_partitions)
+                                .step_by(workers_count as usize)
+                                .collect()
+                        });
+
+                    dbg!(&sync_records_to_claim);
+
+                    let n_sync_records_to_claim = sync_records_to_claim.as_ref().map(|x| x.len());
+
+                    // TODO: THIS NEEDS THE LEASE SOMEHOW. MAYBE THERE SHOULD BE A CHANNEL FROM
+                    // THE CLUSTER MANAGEMENT THREAD TO THE WORKER STUFF, WOULD BOTH TELL THE
+                    // WORKER BIT WHEN TO REFRESH (E.G. HAD TO GET A NEW LEASE) AND PROVIDE THE
+                    // UP-TO-DATE LEASE_ID. OR MAYBE THIS SHOULD ALL BE IN THAT THREAD AS WELL
+                    // ANYWAY?!?!??!
+                    let result = if let Some(sync_records_to_claim) = sync_records_to_claim {
+                        for i in sync_records_to_claim {
+                            create_a_sync_lock_record(
+                                &mut etcd_clients.kv,
+                                1234,
+                                node_name.to_owned(),
+                                &i.to_string(),
+                            )
+                            .await;
+                        }
+                    };
+
+                    dbg!(result);
+
+                    event!(
+                        Level::DEBUG,
+                        workers_count,
+                        current_worker = node_name,
+                        current_worker_index,
+                        n_sync_records_to_claim,
+                        "kvs strings: {:#?}",
+                        mapped_kv
+                    );
+                }
             }
             .instrument(span!(Level::INFO, "get cluster members list and count"))
             .await;
