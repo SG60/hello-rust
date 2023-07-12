@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 use thiserror::Error;
 use tracing::{event, span, Instrument, Level};
 
-use crate::{do_with_retries, etcd};
+use crate::{do_with_retries, etcd, loop_getting_cluster_members};
 
 use crate::etcd::{
     etcdserverpb::{PutResponse, RangeResponse},
@@ -48,7 +48,7 @@ pub async fn manage_cluster_node_membership(mut etcd_clients: EtcdClients, node_
                 lease.id
             );
 
-            record_node_membership(&mut etcd_clients, lease.id, node_name.clone())
+            record_node_membership(&mut etcd_clients.clone(), lease.id, node_name.clone())
                 .await
                 .map_err(|e| {
                     event!(Level::ERROR, "{:#?}", e);
@@ -67,11 +67,29 @@ pub async fn manage_cluster_node_membership(mut etcd_clients: EtcdClients, node_
             Ok(_) => {
                 // TODO: take in the shutdown signal channel, then stop [etcd::lease_keep_alive] and switch
                 // to a task that revokes the etcd lease for a clean shutdown.
-                let result =
-                    crate::etcd::lease_keep_alive(etcd_clients.lease.clone(), lease.id).await;
 
-                if result.is_err() {
-                    println!("Error with lease_keep_alive, will create a new lease")
+                let lease_keep_alive_join_handle = tokio::spawn(crate::etcd::lease_keep_alive(
+                    etcd_clients.clone().lease,
+                    lease.id,
+                ));
+                let run_work_join_handle = tokio::spawn(loop_getting_cluster_members(
+                    etcd_clients.clone(),
+                    node_name.clone(),
+                    lease.id,
+                ));
+
+                tokio::select! {
+                    handle = lease_keep_alive_join_handle => {
+                        let result = handle.unwrap();
+                        dbg!("lease_keep_alive_join_handle completed!");
+
+                        if result.is_err() {
+                            println!("Error with lease_keep_alive, will create a new lease")
+                        };
+                    },
+                    _ = run_work_join_handle => {
+                        dbg!("run_work_join_handle completed!");
+                    }
                 };
             }
             Err(e) => {
@@ -81,6 +99,8 @@ pub async fn manage_cluster_node_membership(mut etcd_clients: EtcdClients, node_
                 );
             }
         };
+
+        dbg!("Reached end of event loop");
 
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
     }
@@ -92,7 +112,7 @@ pub async fn manage_cluster_node_membership(mut etcd_clients: EtcdClients, node_
 pub async fn record_node_membership(
     etcd_clients: &mut EtcdClients,
     lease: i64,
-    node_name: String
+    node_name: String,
 ) -> Result<PutResponse> {
     let hostname = node_name;
 
@@ -136,6 +156,7 @@ pub async fn get_all_worker_records(kv_client: &mut KvClient) -> Result<RangeRes
 }
 
 /// Create a KV record in etcd to represent a worker lock for this worker
+#[tracing::instrument]
 pub async fn create_a_sync_lock_record(
     kv_client: &mut KvClient,
     current_lease: i64,
@@ -181,4 +202,109 @@ pub async fn create_a_sync_lock_record(
     dbg!(result);
 
     unimplemented!()
+}
+
+#[tracing::instrument]
+pub async fn create_n_sync_lock_records(
+    kv_client: &mut KvClient,
+    current_lease: i64,
+    worker_id: String,
+    number_of_sync_partitions: usize,
+    workers_count: usize,
+    current_worker_index: usize,
+) {
+    let sync_records_to_claim: Vec<usize> = ((current_worker_index)..number_of_sync_partitions)
+        .step_by(workers_count)
+        .collect();
+
+    dbg!(&sync_records_to_claim);
+
+    let n_sync_records_to_claim = sync_records_to_claim.len();
+
+    // TODO: THIS NEEDS THE LEASE SOMEHOW. MAYBE THERE SHOULD BE A CHANNEL FROM
+    // THE CLUSTER MANAGEMENT THREAD TO THE WORKER STUFF, WOULD BOTH TELL THE
+    // WORKER BIT WHEN TO REFRESH (E.G. HAD TO GET A NEW LEASE) AND PROVIDE THE
+    // UP-TO-DATE LEASE_ID. OR MAYBE THIS SHOULD ALL BE IN THAT THREAD AS WELL
+    // ANYWAY?!?!??!
+    let result = for i in sync_records_to_claim {
+        create_a_sync_lock_record(
+            kv_client,
+            current_lease,
+            worker_id.to_owned(),
+            &i.to_string(),
+        )
+        .await;
+    };
+
+    dbg!(result);
+
+    event!(
+        Level::DEBUG,
+        workers_count,
+        worker_id,
+        current_worker_index,
+        n_sync_records_to_claim
+    );
+
+    result
+}
+
+#[tracing::instrument]
+pub async fn get_worker_records_and_establish_locks(
+    kv_client: &mut KvClient,
+    node_name: &str,
+    current_lease: i64,
+) -> Vec<u16> {
+    let list = get_all_worker_records(kv_client).await;
+    if let Ok(list) = list {
+        let mapped_kv: Vec<_> = list
+            .kvs
+            .iter()
+            .map(|element| {
+                std::str::from_utf8(&element.key)
+                    .expect("Should be valid utf8")
+                    .strip_prefix("/nodes/")
+                    .expect("should be formatted with /nodes/ at start")
+            })
+            .collect();
+
+        let current_worker_index = mapped_kv
+            .iter()
+            .position(|x| *x == node_name)
+            .expect("should exist");
+        let workers_count = list.count;
+
+        // This should be equal to the total number of sync partitions in DynamoDB.
+        // Perhaps there should be a way to calculate this automatically?! For now it
+        // is fine as a compile time constant.
+        let total_number_of_sync_partitions = 21;
+
+        let result = create_n_sync_lock_records(
+            kv_client,
+            current_lease,
+            node_name.to_string(),
+            total_number_of_sync_partitions,
+            workers_count.try_into().unwrap(),
+            current_worker_index,
+        )
+        .await;
+
+        dbg!(result);
+
+        let sync_partitions = vec![1, 2, 3, 4];
+
+        event!(
+            Level::DEBUG,
+            workers_count,
+            node_name,
+            current_lease,
+            current_worker_index,
+            "kvs strings: {:#?}",
+            mapped_kv
+        );
+
+        sync_partitions
+    } else {
+        vec![]
+    }
 }

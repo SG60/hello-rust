@@ -1,9 +1,9 @@
-use std::future::Future;
+use std::{future::Future, time::Duration};
 
 use serde::{Deserialize, Serialize};
 use tracing::{event, Level};
 
-use crate::etcd::EtcdClients;
+use crate::{etcd::EtcdClients, cluster_management::get_worker_records_and_establish_locks};
 
 pub mod aws;
 pub mod cluster_management;
@@ -195,7 +195,7 @@ where
 }
 
 #[tracing::instrument]
-pub async fn do_some_stuff_with_etcd(
+pub async fn do_some_stuff_with_etcd_and_init(
     etcd_endpoint: &str,
     node_name: &str,
 ) -> cluster_management::Result<EtcdClients> {
@@ -209,6 +209,21 @@ pub async fn do_some_stuff_with_etcd(
     dbg!(_result_of_tokio_task);
 
     Ok(etcd_clients)
+}
+
+pub async fn loop_getting_cluster_members(
+    mut etcd_clients: EtcdClients,
+    node_name: String,
+    current_lease: i64,
+) {
+    loop {
+        let sync_partition_lock_records =
+            get_worker_records_and_establish_locks(&mut etcd_clients.kv, node_name.as_str(), current_lease)
+                .await;
+        dbg!(sync_partition_lock_records);
+
+        tokio::time::sleep(Duration::from_secs(20)).await;
+    }
 }
 
 #[cfg(test)]
