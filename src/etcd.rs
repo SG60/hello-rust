@@ -3,8 +3,8 @@
 use self::etcdserverpb::LeaseKeepAliveResponse;
 // reexports
 pub use self::etcdserverpb::{
-    kv_client, lease_client, LeaseGrantRequest, LeaseGrantResponse, LeaseKeepAliveRequest,
-    PutRequest,
+    compare, kv_client, lease_client, request_op, Compare, LeaseGrantRequest, LeaseGrantResponse,
+    LeaseKeepAliveRequest, PutRequest, RequestOp, TxnRequest,
 };
 
 use std::env::VarError;
