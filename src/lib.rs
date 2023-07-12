@@ -3,7 +3,12 @@ use std::{future::Future, time::Duration};
 use serde::{Deserialize, Serialize};
 use tracing::{event, Level};
 
-use crate::{etcd::EtcdClients, cluster_management::get_worker_records_and_establish_locks};
+use crate::{
+    cluster_management::{
+        get_worker_records_and_establish_locks, initialise_lease_and_node_membership,
+    },
+    etcd::EtcdClients,
+};
 
 pub mod aws;
 pub mod cluster_management;
@@ -202,7 +207,7 @@ pub async fn do_some_stuff_with_etcd_and_init(
     event!(Level::INFO, "Initialising etcd grpc clients");
     let etcd_clients = do_with_retries(|| EtcdClients::connect(etcd_endpoint.to_owned())).await;
 
-    let _result_of_tokio_task = tokio::spawn(cluster_management::manage_cluster_node_membership(
+    let _result_of_tokio_task = tokio::spawn(manage_cluster_node_membership_and_start_work(
         etcd_clients.clone(),
         node_name.to_owned(),
     ));
@@ -211,15 +216,77 @@ pub async fn do_some_stuff_with_etcd_and_init(
     Ok(etcd_clients)
 }
 
+/// Manage cluster membership recording
+///
+/// Uses [record_node_membership] and various lease functions.
+///
+/// Doesn't return a result, so that it can run nicely in a separate tokio task. Will just retry
+/// the whole thing if any part fails.
+async fn manage_cluster_node_membership_and_start_work(
+    etcd_clients: EtcdClients,
+    node_name: String,
+) {
+    loop {
+        let mut lease = Default::default();
+        let result = initialise_lease_and_node_membership(etcd_clients.clone(), node_name.clone())
+            .await
+            .map(|x| lease = x);
+
+        match result {
+            Ok(_) => {
+                // TODO: take in the shutdown signal channel, then stop [etcd::lease_keep_alive] and switch
+                // to a task that revokes the etcd lease for a clean shutdown.
+
+                let lease_keep_alive_join_handle = tokio::spawn(crate::etcd::lease_keep_alive(
+                    etcd_clients.clone().lease,
+                    lease.id,
+                ));
+                let run_work_join_handle = tokio::spawn(loop_getting_cluster_members(
+                    etcd_clients.clone(),
+                    node_name.clone(),
+                    lease.id,
+                ));
+
+                tokio::select! {
+                    handle = lease_keep_alive_join_handle => {
+                        let result = handle.unwrap();
+                        dbg!("lease_keep_alive_join_handle completed!");
+
+                        if result.is_err() {
+                            println!("Error with lease_keep_alive, will create a new lease")
+                        };
+                    },
+                    _ = run_work_join_handle => {
+                        dbg!("run_work_join_handle completed!");
+                    }
+                };
+            }
+            Err(e) => {
+                event!(
+                    Level::ERROR,
+                    "Error initialising cluster membership, will try again. Error: {e:#?}"
+                );
+            }
+        };
+
+        dbg!("Reached end of event loop");
+
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    }
+}
+
 pub async fn loop_getting_cluster_members(
     mut etcd_clients: EtcdClients,
     node_name: String,
     current_lease: i64,
 ) {
     loop {
-        let sync_partition_lock_records =
-            get_worker_records_and_establish_locks(&mut etcd_clients.kv, node_name.as_str(), current_lease)
-                .await;
+        let sync_partition_lock_records = get_worker_records_and_establish_locks(
+            &mut etcd_clients.kv,
+            node_name.as_str(),
+            current_lease,
+        )
+        .await;
         dbg!(sync_partition_lock_records);
 
         tokio::time::sleep(Duration::from_secs(20)).await;

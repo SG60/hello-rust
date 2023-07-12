@@ -1,5 +1,4 @@
 use anyhow::Result;
-use hello_rust_backend::etcd::EtcdClients;
 use std::time::Duration;
 use tokio::signal::unix::{signal, SignalKind};
 use tokio::sync::watch;
@@ -8,17 +7,12 @@ use tokio::sync::watch;
 use hello_rust_backend::tracing_utils::set_up_logging;
 use tracing::{event, span, Instrument, Level};
 
-use hello_rust_backend::cluster_management::{
-    create_a_sync_lock_record, create_n_sync_lock_records, get_all_worker_records,
-    get_current_cluster_members_count, get_worker_records_and_establish_locks,
-};
-use hello_rust_backend::{do_some_stuff_with_etcd_and_init, loop_getting_cluster_members};
+use hello_rust_backend::do_some_stuff_with_etcd_and_init;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     set_up_logging()?;
 
-    // let (send, mut recv): (Sender<()>, _) = channel(1);
     let (tx, rx) = watch::channel(());
 
     // Env vars! -----------------------------------
@@ -47,7 +41,7 @@ async fn main() -> Result<()> {
 
     let node_name = std::env::var("HOSTNAME")?;
 
-    let etcd_clients = async {
+    async {
         // This is correct! If we yield here, the span will be exited,
         // and re-entered when we resume.
         if settings_map.etcd_url.is_some() {
@@ -68,7 +62,6 @@ async fn main() -> Result<()> {
                 }
                 Err(ref error) => event!(Level::ERROR, "Error while talking to etcd. {:#?}", error),
             }
-            event!(Level::INFO, "Finished initial talking to etcd.");
             result.ok()
         } else {
             event!(Level::WARN, "No etcd endpoint set.");
@@ -80,46 +73,21 @@ async fn main() -> Result<()> {
     // ...and await it.
     .await;
 
-    async fn some_operation(message: &str, duration: Duration, receiver: watch::Receiver<()>) {
-        loop {
-            tokio::time::sleep(duration).await;
-
-            let span = span!(Level::TRACE, "message span");
-            let _enter = span.enter();
-            event!(Level::INFO, message);
-
-            if receiver.has_changed().unwrap_or(true) {
-                break;
-            };
-        }
-        event!(Level::INFO, "Task shutting down. ({})", message);
-
-        // sender goes out of scope ...
-    }
-
-    // let _op1 = tokio::spawn(some_operation(
-    //     "Hello World!",
-    //     Duration::from_secs(40),
-    //     rx.clone(),
-    // ));
-    //
-    // let _op2 = tokio::spawn(some_operation(
-    //     "hello world from a shorter loop!",
-    //     Duration::from_secs(30),
-    //     rx.clone(),
-    // ));
-
-    if let Some(etcd_clients) = etcd_clients {
-        let mut rx2 = rx.clone();
-        tokio::spawn(async move {
-            tokio::select! {
-                // _ = loop_getting_cluster_members(etcd_clients, &node_name, current_lease) => {},
-                _ = rx2.changed() => {
-                    dbg!("rx shutdown channel changed");
-                 }
+    let mut rx2 = rx.clone();
+    tokio::spawn(async move {
+        tokio::select! {
+            _ = async move {
+                loop {
+                    event!(Level::TRACE, "a loop");
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                }
             }
-        });
-    }
+                .instrument(span!(Level::TRACE, "loop span")) => {},
+            _ = rx2.changed() => {
+                dbg!("rx shutdown channel changed");
+            }
+        }
+    });
 
     let mut sigterm_stream = signal(SignalKind::terminate())?;
     let mut sigint_stream = signal(SignalKind::interrupt())?;

@@ -3,9 +3,9 @@
 
 use once_cell::sync::Lazy;
 use thiserror::Error;
-use tracing::{event, span, Instrument, Level};
+use tracing::{event, Level};
 
-use crate::{do_with_retries, etcd, loop_getting_cluster_members};
+use crate::{do_with_retries, etcd};
 
 use crate::etcd::{
     etcdserverpb::{PutResponse, RangeResponse},
@@ -13,9 +13,11 @@ use crate::etcd::{
 };
 
 pub const REPLICA_PREFIX: &str = "/nodes/";
-pub const SYNC_LOCK_PREFIX: &str = "/sync_locks/";
 pub static REPLICA_PREFIX_RANGE_END: Lazy<String> =
     Lazy::new(|| crate::etcd::calculate_prefix_range_end(REPLICA_PREFIX));
+pub const SYNC_LOCK_PREFIX: &str = "/sync_locks/";
+pub static SYNC_LOCK_PREFIX_RANGE_END: Lazy<String> =
+    Lazy::new(|| crate::etcd::calculate_prefix_range_end(SYNC_LOCK_PREFIX));
 
 #[derive(Error, Debug)]
 pub enum Error {
@@ -29,81 +31,28 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// Manage cluster membership recording
-///
-/// Uses [record_node_membership] and various lease functions.
-///
-/// Doesn't return a result, so that it can run nicely in a separate tokio task. Will just retry
-/// the whole thing if any part fails.
-pub async fn manage_cluster_node_membership(mut etcd_clients: EtcdClients, node_name: String) {
-    loop {
-        let mut lease = Default::default();
-        let result = async {
-            lease = do_with_retries(|| crate::etcd::create_lease(etcd_clients.lease.clone())).await;
+#[tracing::instrument]
+pub async fn initialise_lease_and_node_membership(
+    etcd_clients: EtcdClients,
+    node_name: String,
+) -> Result<etcd::LeaseGrantResponse> {
+    let lease = do_with_retries(|| crate::etcd::create_lease(etcd_clients.lease.clone())).await;
 
-            event!(
-                Level::INFO,
-                etcd_lease_id = lease.id,
-                "current lease: {:#?}",
-                lease.id
-            );
+    event!(
+        Level::TRACE,
+        etcd_lease_id = lease.id,
+        "current lease: {:#?}",
+        lease.id
+    );
 
-            record_node_membership(&mut etcd_clients.clone(), lease.id, node_name.clone())
-                .await
-                .map_err(|e| {
-                    event!(Level::ERROR, "{:#?}", e);
-                    e
-                })?;
+    record_node_membership(&mut etcd_clients.clone(), lease.id, node_name.clone())
+        .await
+        .map_err(|e| {
+            event!(Level::ERROR, "{:#?}", e);
+            e
+        })?;
 
-            Ok::<_, Error>(())
-        }
-        .instrument(span!(
-            Level::INFO,
-            "initialise lease for cluster membership"
-        ))
-        .await;
-
-        match result {
-            Ok(_) => {
-                // TODO: take in the shutdown signal channel, then stop [etcd::lease_keep_alive] and switch
-                // to a task that revokes the etcd lease for a clean shutdown.
-
-                let lease_keep_alive_join_handle = tokio::spawn(crate::etcd::lease_keep_alive(
-                    etcd_clients.clone().lease,
-                    lease.id,
-                ));
-                let run_work_join_handle = tokio::spawn(loop_getting_cluster_members(
-                    etcd_clients.clone(),
-                    node_name.clone(),
-                    lease.id,
-                ));
-
-                tokio::select! {
-                    handle = lease_keep_alive_join_handle => {
-                        let result = handle.unwrap();
-                        dbg!("lease_keep_alive_join_handle completed!");
-
-                        if result.is_err() {
-                            println!("Error with lease_keep_alive, will create a new lease")
-                        };
-                    },
-                    _ = run_work_join_handle => {
-                        dbg!("run_work_join_handle completed!");
-                    }
-                };
-            }
-            Err(e) => {
-                event!(
-                    Level::ERROR,
-                    "Error initialising cluster membership, will try again. Error: {e:#?}"
-                );
-            }
-        };
-
-        dbg!("Reached end of event loop");
-
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-    }
+    Ok(lease)
 }
 
 /// Records node membership of the cluster of workers. This communicates with etcd and uses the
@@ -155,6 +104,20 @@ pub async fn get_all_worker_records(kv_client: &mut KvClient) -> Result<RangeRes
     Ok(kv_client.range(range_request).await?.into_inner())
 }
 
+/// Get all lock partition records from etcd
+#[tracing::instrument]
+pub async fn get_all_sync_lock_records(kv_client: &mut KvClient) -> Result<RangeResponse> {
+    let range_end: String = SYNC_LOCK_PREFIX_RANGE_END.to_string();
+
+    let range_request = tonic::Request::new(crate::etcd::etcdserverpb::RangeRequest {
+        key: SYNC_LOCK_PREFIX.into(),
+        range_end: range_end.into(),
+        ..Default::default()
+    });
+
+    Ok(kv_client.range(range_request).await?.into_inner())
+}
+
 /// Create a KV record in etcd to represent a worker lock for this worker
 #[tracing::instrument]
 pub async fn create_a_sync_lock_record(
@@ -163,31 +126,19 @@ pub async fn create_a_sync_lock_record(
     worker_id: String,
     lock_key: &str,
 ) -> Result<()> {
-    // let result = kv_client
-    //     .put(etcd::PutRequest {
-    //         key: lock_key.into(),
-    //         value: worker_id.clone().into(),
-    //         lease: current_lease,
-    //         prev_kv: false,
-    //         ignore_value: false,
-    //         ignore_lease: false,
-    //     })
-    //     .await?;
-    //
-    // dbg!(result);
-
-    let result = kv_client
+    let lock_key: Vec<u8> = format!("{}{}", SYNC_LOCK_PREFIX, lock_key).into();
+    kv_client
         .txn(etcd::TxnRequest {
             compare: vec![etcd::Compare {
                 result: etcd::compare::CompareResult::Equal.into(),
-                key: lock_key.into(),
-                range_end: lock_key.into(),
+                key: lock_key.clone(),
+                range_end: lock_key.clone(),
                 target: etcd::compare::CompareTarget::Version.into(),
                 target_union: Some(etcd::compare::TargetUnion::Version(0)),
             }],
             success: vec![etcd::RequestOp {
                 request: Some(etcd::request_op::Request::RequestPut(etcd::PutRequest {
-                    key: lock_key.into(),
+                    key: lock_key,
                     value: worker_id.into(),
                     lease: current_lease,
                     prev_kv: false,
@@ -199,9 +150,7 @@ pub async fn create_a_sync_lock_record(
         })
         .await?;
 
-    dbg!(result);
-
-    unimplemented!()
+    Ok(())
 }
 
 #[tracing::instrument]
@@ -212,7 +161,7 @@ pub async fn create_n_sync_lock_records(
     number_of_sync_partitions: usize,
     workers_count: usize,
     current_worker_index: usize,
-) {
+) -> Result<()> {
     let sync_records_to_claim: Vec<usize> = ((current_worker_index)..number_of_sync_partitions)
         .step_by(workers_count)
         .collect();
@@ -221,22 +170,15 @@ pub async fn create_n_sync_lock_records(
 
     let n_sync_records_to_claim = sync_records_to_claim.len();
 
-    // TODO: THIS NEEDS THE LEASE SOMEHOW. MAYBE THERE SHOULD BE A CHANNEL FROM
-    // THE CLUSTER MANAGEMENT THREAD TO THE WORKER STUFF, WOULD BOTH TELL THE
-    // WORKER BIT WHEN TO REFRESH (E.G. HAD TO GET A NEW LEASE) AND PROVIDE THE
-    // UP-TO-DATE LEASE_ID. OR MAYBE THIS SHOULD ALL BE IN THAT THREAD AS WELL
-    // ANYWAY?!?!??!
-    let result = for i in sync_records_to_claim {
+    for i in sync_records_to_claim {
         create_a_sync_lock_record(
             kv_client,
             current_lease,
             worker_id.to_owned(),
             &i.to_string(),
         )
-        .await;
-    };
-
-    dbg!(result);
+        .await?;
+    }
 
     event!(
         Level::DEBUG,
@@ -246,7 +188,7 @@ pub async fn create_n_sync_lock_records(
         n_sync_records_to_claim
     );
 
-    result
+    Ok(())
 }
 
 #[tracing::instrument]
@@ -263,7 +205,7 @@ pub async fn get_worker_records_and_establish_locks(
             .map(|element| {
                 std::str::from_utf8(&element.key)
                     .expect("Should be valid utf8")
-                    .strip_prefix("/nodes/")
+                    .strip_prefix(REPLICA_PREFIX)
                     .expect("should be formatted with /nodes/ at start")
             })
             .collect();
@@ -279,7 +221,7 @@ pub async fn get_worker_records_and_establish_locks(
         // is fine as a compile time constant.
         let total_number_of_sync_partitions = 21;
 
-        let result = create_n_sync_lock_records(
+        create_n_sync_lock_records(
             kv_client,
             current_lease,
             node_name.to_string(),
@@ -287,11 +229,31 @@ pub async fn get_worker_records_and_establish_locks(
             workers_count.try_into().unwrap(),
             current_worker_index,
         )
-        .await;
+        .await
+        .unwrap();
 
-        dbg!(result);
-
-        let sync_partitions = vec![1, 2, 3, 4];
+        let current_lock_records = get_all_sync_lock_records(kv_client)
+            .await
+            .expect("should be valid");
+        let sync_partitions: Vec<_> = current_lock_records
+            .kvs
+            .iter()
+            .filter_map(|element| {
+                if std::str::from_utf8(&element.value).expect("Should be valid utf8") == node_name {
+                    Some(
+                        std::str::from_utf8(&element.key)
+                            .expect("Should be valid utf8")
+                            .strip_prefix(SYNC_LOCK_PREFIX)
+                            .expect("should be formatted with correct prefix")
+                            .parse()
+                            .expect("should be valid number"),
+                    )
+                } else {
+                    None
+                }
+            })
+            .collect();
+        dbg!(sync_partitions.clone());
 
         event!(
             Level::DEBUG,
