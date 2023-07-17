@@ -16,7 +16,7 @@ fun:
 
 # clippy
 lint:
-    cargo clippy
+    cargo clippy && cargo fmt --check --all
 
 # watch (default to running test)
 watch COMMAND='test':
