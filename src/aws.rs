@@ -3,9 +3,12 @@ use aws_sdk_dynamodb::{error::QueryError, model::AttributeValue, types::SdkError
 use serde::{Deserialize, Serialize};
 use serde_dynamo::from_items;
 use thiserror::Error;
+use tokio::task::JoinSet;
 use tokio_stream::StreamExt;
+use tracing::trace;
 use typeshare::typeshare;
 
+#[tracing::instrument]
 pub async fn load_client() -> Client {
     let config = aws_config::load_from_env().await;
     aws_sdk_dynamodb::Client::new(&config)
@@ -16,6 +19,7 @@ pub async fn load_client() -> Client {
 /// # Errors
 ///
 /// This function will return an error if the dynamo response fails.
+#[tracing::instrument]
 pub async fn get_users(client: &Client) -> Result<Vec<UserRecord>, DynamoClientError> {
     let paginator = client
         .query()
@@ -58,6 +62,7 @@ pub struct UserRecordNotionData {
     pub notion_access_token: String,
 }
 
+#[tracing::instrument]
 pub async fn get_sync_record(
     client: &Client,
     user_id: &str,
@@ -79,6 +84,7 @@ pub async fn get_sync_record(
     Ok(sync_records)
 }
 
+#[tracing::instrument]
 pub async fn get_sync_records(client: &Client) -> Result<Vec<SyncRecord>, DynamoClientError> {
     let paginator = client
         .query()
@@ -94,6 +100,60 @@ pub async fn get_sync_records(client: &Client) -> Result<Vec<SyncRecord>, Dynamo
     let items = paginator.collect::<Result<Vec<_>, _>>().await?;
 
     let sync_records = from_items(items)?;
+
+    Ok(sync_records)
+}
+
+#[tracing::instrument]
+async fn get_sync_records_for_one_partition(
+    client: &Client,
+    partition: u16,
+) -> Result<Vec<SyncRecord>, DynamoClientError> {
+    let partition_string = "sync#".to_string() + &partition.to_string();
+
+    let paginator = client
+        .query()
+        .table_name("tasks")
+        .index_name("type-data-index")
+        .key_condition_expression("#t = :partKey and begins_with(#s, :sortKeyValue)")
+        .expression_attribute_names("#t", "type")
+        .expression_attribute_names("#s", "data")
+        .expression_attribute_values(":partKey", AttributeValue::S(partition_string))
+        .expression_attribute_values(":sortKeyValue", AttributeValue::S("SCHEDULED".to_string()))
+        .into_paginator()
+        .items()
+        .send();
+
+    let items = paginator.collect::<Result<Vec<_>, _>>().await?;
+
+    let sync_records = from_items(items)?;
+
+    Ok(sync_records)
+}
+
+#[tracing::instrument]
+pub async fn get_sync_records_for_partitions(
+    client: Client,
+    partitions: Vec<u16>,
+) -> Result<Vec<SyncRecord>, DynamoClientError> {
+    let mut set = JoinSet::new();
+
+    // TODO: there should possibly be some exponential retry logic with these, incase of rate
+    // limiting from DynamoDB. But it should limit the number of tries, and then just return an
+    // error after that limit.
+    for i in partitions {
+        let client = client.clone();
+        set.spawn(async move { get_sync_records_for_one_partition(&client, i).await });
+    }
+
+    let mut sync_records = vec![];
+
+    while let Some(res) = set.join_next().await {
+        let mut result = res.unwrap()?;
+        sync_records.append(&mut result);
+    }
+
+    trace!("{:#?}", &sync_records);
 
     Ok(sync_records)
 }

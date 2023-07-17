@@ -39,9 +39,9 @@ async fn main() -> Result<()> {
 
     let span = span!(Level::TRACE, "talk to etcd");
 
-    let node_name = std::env::var("HOSTNAME")?;
+    let node_name = settings_map.node_name;
 
-    async {
+    let result_of_work = async {
         // This is correct! If we yield here, the span will be exited,
         // and re-entered when we resume.
         if settings_map.etcd_url.is_some() {
@@ -60,7 +60,6 @@ async fn main() -> Result<()> {
 
             match result {
                 Ok(ref result) => {
-                    dbg!("{:#?}", result);
                     event!(Level::INFO, "{:#?}", result);
                 }
                 Err(ref error) => event!(Level::ERROR, "Error while talking to etcd. {:#?}", error),
@@ -92,13 +91,15 @@ async fn main() -> Result<()> {
         }
     });
 
-    assert_eq!(3, tx.receiver_count());
+    let result_of_work_join_handle = result_of_work.map(|x| x.result_of_tokio_task);
 
     let mut sigterm_stream = signal(SignalKind::terminate())?;
     let mut sigint_stream = signal(SignalKind::interrupt())?;
     tokio::select! {
-        _ = sigterm_stream.recv() => {dbg!("sigterm received");}
-        _ = sigint_stream.recv() => {dbg!("sigint received");}
+        _ = sigterm_stream.recv() => {event!(Level::INFO, "sigterm received");}
+        _ = sigint_stream.recv() => {event!(Level::INFO, "sigint received");}
+        // also quit if the work task has completed
+        _ = async {result_of_work_join_handle.expect("crash here?!").await} => {event!(Level::INFO, "work finished");}
     }
 
     let span = span!(Level::TRACE, "Shutting down tasks");

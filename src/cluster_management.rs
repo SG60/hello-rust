@@ -3,7 +3,7 @@
 
 use once_cell::sync::Lazy;
 use thiserror::Error;
-use tracing::{event, Level};
+use tracing::{event, trace, Level};
 
 use crate::{do_with_retries, etcd};
 
@@ -127,12 +127,14 @@ pub async fn create_a_sync_lock_record(
     lock_key: &str,
 ) -> Result<()> {
     let lock_key: Vec<u8> = format!("{}{}", SYNC_LOCK_PREFIX, lock_key).into();
+
     kv_client
         .txn(etcd::TxnRequest {
             compare: vec![etcd::Compare {
                 result: etcd::compare::CompareResult::Equal.into(),
                 key: lock_key.clone(),
-                range_end: lock_key.clone(),
+                // range_end has to be blank to just check one item
+                range_end: "".into(),
                 target: etcd::compare::CompareTarget::Version.into(),
                 target_union: Some(etcd::compare::TargetUnion::Version(0)),
             }],
@@ -166,7 +168,7 @@ pub async fn create_n_sync_lock_records(
         .step_by(workers_count)
         .collect();
 
-    dbg!(&sync_records_to_claim);
+    trace!("{:?}", &sync_records_to_claim);
 
     let n_sync_records_to_claim = sync_records_to_claim.len();
 
@@ -219,7 +221,7 @@ pub async fn get_worker_records_and_establish_locks(
         // This should be equal to the total number of sync partitions in DynamoDB.
         // Perhaps there should be a way to calculate this automatically?! For now it
         // is fine as a compile time constant.
-        let total_number_of_sync_partitions = 21;
+        let total_number_of_sync_partitions = 100;
 
         create_n_sync_lock_records(
             kv_client,
@@ -253,7 +255,6 @@ pub async fn get_worker_records_and_establish_locks(
                 }
             })
             .collect();
-        dbg!(sync_partitions.clone());
 
         event!(
             Level::DEBUG,
