@@ -251,9 +251,6 @@ async fn manage_cluster_node_membership_and_start_work(
 
         match result {
             Ok(_) => {
-                // TODO: take in the shutdown signal channel, then stop [etcd::lease_keep_alive] and switch
-                // to a task that revokes the etcd lease for a clean shutdown.
-
                 let lease_keep_alive_join_handle = tokio::spawn(crate::etcd::lease_keep_alive(
                     etcd_clients.clone().lease,
                     lease.id,
