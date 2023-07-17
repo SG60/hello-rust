@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
 
     let span = span!(Level::TRACE, "talk to etcd");
 
-    let node_name = std::env::var("HOSTNAME")?;
+    let node_name = settings_map.node_name;
 
     async {
         // This is correct! If we yield here, the span will be exited,

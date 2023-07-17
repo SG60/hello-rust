@@ -13,6 +13,8 @@ pub struct Settings {
     pub etcd_url: Option<String>,
     #[serde(default = "clustered_default")]
     pub clustered: bool,
+
+    pub node_name: String,
 }
 
 fn clustered_default() -> bool {
@@ -24,5 +26,7 @@ pub fn get_settings() -> Result<Settings, figment::Error> {
     Figment::new()
         .merge(Toml::file("hello-rust-config.toml"))
         .merge(Env::prefixed("APP_"))
+        // fallbacks
+        .join(Env::raw().only(&["HOSTNAME"]).map(|_| "node_name".into()))
         .extract()
 }
