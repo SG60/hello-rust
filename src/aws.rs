@@ -98,6 +98,10 @@ pub async fn get_sync_records(client: &Client) -> Result<Vec<SyncRecord>, Dynamo
     Ok(sync_records)
 }
 
+pub async fn get_sync_records_for_partitions() {
+    unimplemented!()
+}
+
 #[typeshare]
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SyncRecord {

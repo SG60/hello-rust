@@ -5,6 +5,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{event, Level};
 
 use crate::{
+    aws::get_sync_records_for_partitions,
     cluster_management::{
         get_worker_records_and_establish_locks, initialise_lease_and_node_membership,
     },
@@ -243,6 +244,9 @@ async fn manage_cluster_node_membership_and_start_work(
         cloned_token.cancel();
     });
 
+    // initialising the dynamo db client is expensive, so should only be done once
+    let dynamo_db_client = std::sync::Arc::new(aws::load_client().await);
+
     loop {
         let mut lease = Default::default();
         let result = initialise_lease_and_node_membership(etcd_clients.clone(), node_name.clone())
@@ -255,10 +259,11 @@ async fn manage_cluster_node_membership_and_start_work(
                     etcd_clients.clone().lease,
                     lease.id,
                 ));
-                let run_work_join_handle = tokio::spawn(loop_getting_cluster_members(
+                let run_work_join_handle = tokio::spawn(start_sync_pipeline(
                     etcd_clients.clone(),
                     node_name.clone(),
                     lease.id,
+                    dynamo_db_client.clone(),
                 ));
 
                 tokio::select! {
@@ -293,10 +298,11 @@ async fn manage_cluster_node_membership_and_start_work(
     }
 }
 
-pub async fn loop_getting_cluster_members(
+pub async fn start_sync_pipeline(
     mut etcd_clients: EtcdClients,
     node_name: String,
     current_lease: i64,
+    dynamo_db_client: std::sync::Arc<aws_sdk_dynamodb::Client>,
 ) {
     loop {
         let sync_partition_lock_records = get_worker_records_and_establish_locks(
@@ -307,6 +313,8 @@ pub async fn loop_getting_cluster_members(
         .await;
         dbg!(sync_partition_lock_records);
 
+        dbg!(&dynamo_db_client);
+        get_sync_records_for_partitions().await;
         tokio::time::sleep(Duration::from_secs(20)).await;
     }
 }
