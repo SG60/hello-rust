@@ -132,7 +132,8 @@ pub async fn create_a_sync_lock_record(
             compare: vec![etcd::Compare {
                 result: etcd::compare::CompareResult::Equal.into(),
                 key: lock_key.clone(),
-                range_end: lock_key.clone(),
+                // range_end has to be blank to just check one item
+                range_end: "".into(),
                 target: etcd::compare::CompareTarget::Version.into(),
                 target_union: Some(etcd::compare::TargetUnion::Version(0)),
             }],
