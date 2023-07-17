@@ -201,24 +201,32 @@ where
     }
 }
 
+#[derive(Debug)]
+pub struct InitAndEtcdTaskReturn {
+    pub etcd_clients: EtcdClients,
+    pub result_of_tokio_task: tokio::task::JoinHandle<()>,
+}
+
 /// Spawns another thread that does cluster membership and starting the sync process
 #[tracing::instrument]
 pub async fn do_some_stuff_with_etcd_and_init(
     etcd_endpoint: &str,
     node_name: &str,
     shutdown_receiver: tokio::sync::watch::Receiver<()>,
-) -> cluster_management::Result<EtcdClients> {
+) -> cluster_management::Result<InitAndEtcdTaskReturn> {
     event!(Level::INFO, "Initialising etcd grpc clients");
     let etcd_clients = do_with_retries(|| EtcdClients::connect(etcd_endpoint.to_owned())).await;
 
-    let _result_of_tokio_task = tokio::spawn(manage_cluster_node_membership_and_start_work(
+    let result_of_tokio_task = tokio::spawn(manage_cluster_node_membership_and_start_work(
         etcd_clients.clone(),
         node_name.to_owned(),
         shutdown_receiver,
     ));
-    dbg!(_result_of_tokio_task);
 
-    Ok(etcd_clients)
+    Ok(InitAndEtcdTaskReturn {
+        etcd_clients,
+        result_of_tokio_task,
+    })
 }
 
 /// Manage cluster membership recording
@@ -277,6 +285,7 @@ async fn manage_cluster_node_membership_and_start_work(
                     },
                     _ = run_work_join_handle => {
                         dbg!("run_work_join_handle completed!");
+                        break
                     },
                     _ = token.cancelled() => {
                         event!(Level::INFO, "received shutdown message, ending event loop");
