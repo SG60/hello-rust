@@ -1,6 +1,7 @@
 use std::{future::Future, time::Duration};
 
 use serde::{Deserialize, Serialize};
+use tokio_util::sync::CancellationToken;
 use tracing::{event, Level};
 
 use crate::{
@@ -199,10 +200,12 @@ where
     }
 }
 
+/// Spawns another thread that does cluster membership and starting the sync process
 #[tracing::instrument]
 pub async fn do_some_stuff_with_etcd_and_init(
     etcd_endpoint: &str,
     node_name: &str,
+    shutdown_receiver: tokio::sync::watch::Receiver<()>,
 ) -> cluster_management::Result<EtcdClients> {
     event!(Level::INFO, "Initialising etcd grpc clients");
     let etcd_clients = do_with_retries(|| EtcdClients::connect(etcd_endpoint.to_owned())).await;
@@ -210,6 +213,7 @@ pub async fn do_some_stuff_with_etcd_and_init(
     let _result_of_tokio_task = tokio::spawn(manage_cluster_node_membership_and_start_work(
         etcd_clients.clone(),
         node_name.to_owned(),
+        shutdown_receiver,
     ));
     dbg!(_result_of_tokio_task);
 
@@ -225,7 +229,20 @@ pub async fn do_some_stuff_with_etcd_and_init(
 async fn manage_cluster_node_membership_and_start_work(
     etcd_clients: EtcdClients,
     node_name: String,
+    mut shutdown_receiver: tokio::sync::watch::Receiver<()>,
 ) {
+    let token = CancellationToken::new();
+    let cloned_token = token.clone();
+
+    tokio::spawn(async move {
+        shutdown_receiver.changed().await.unwrap();
+        event!(
+            Level::DEBUG,
+            "shutdown received, triggering cancellation token"
+        );
+        cloned_token.cancel();
+    });
+
     loop {
         let mut lease = Default::default();
         let result = initialise_lease_and_node_membership(etcd_clients.clone(), node_name.clone())
@@ -258,6 +275,10 @@ async fn manage_cluster_node_membership_and_start_work(
                     },
                     _ = run_work_join_handle => {
                         dbg!("run_work_join_handle completed!");
+                    },
+                    _ = token.cancelled() => {
+                        event!(Level::INFO, "received shutdown message, ending event loop");
+                        break
                     }
                 };
             }

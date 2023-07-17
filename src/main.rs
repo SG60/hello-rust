@@ -49,9 +49,12 @@ async fn main() -> Result<()> {
 
             event!(Level::INFO, "Clustered setting: {}", settings_map.clustered);
 
+            let shutdown_receiver = rx.clone();
+
             let result = do_some_stuff_with_etcd_and_init(
                 &settings_map.etcd_url.expect("should be valid string"),
                 node_name.as_str(),
+                shutdown_receiver,
             )
             .await;
 
@@ -78,22 +81,24 @@ async fn main() -> Result<()> {
         tokio::select! {
             _ = async move {
                 loop {
-                    event!(Level::TRACE, "a loop");
+                    event!(Level::INFO, "a loop");
                     tokio::time::sleep(Duration::from_secs(10)).await;
                 }
             }
                 .instrument(span!(Level::TRACE, "loop span")) => {},
             _ = rx2.changed() => {
-                dbg!("rx shutdown channel changed");
+                event!(Level::INFO, "rx shutdown channel changed");
             }
         }
     });
 
+    assert_eq!(3, tx.receiver_count());
+
     let mut sigterm_stream = signal(SignalKind::terminate())?;
     let mut sigint_stream = signal(SignalKind::interrupt())?;
     tokio::select! {
-        _ = sigterm_stream.recv() => {}
-        _ = sigint_stream.recv() => {}
+        _ = sigterm_stream.recv() => {dbg!("sigterm received");}
+        _ = sigint_stream.recv() => {dbg!("sigint received");}
     }
 
     let span = span!(Level::TRACE, "Shutting down tasks");
