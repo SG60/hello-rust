@@ -253,7 +253,7 @@ async fn manage_cluster_node_membership_and_start_work(
     });
 
     // initialising the dynamo db client is expensive, so should only be done once
-    let dynamo_db_client = std::sync::Arc::new(aws::load_client().await);
+    let dynamo_db_client = aws::load_client().await;
 
     loop {
         let mut lease = Default::default();
@@ -311,7 +311,7 @@ pub async fn start_sync_pipeline(
     mut etcd_clients: EtcdClients,
     node_name: String,
     current_lease: i64,
-    dynamo_db_client: std::sync::Arc<aws_sdk_dynamodb::Client>,
+    dynamo_db_client: aws_sdk_dynamodb::Client,
 ) {
     loop {
         let sync_partition_lock_records = get_worker_records_and_establish_locks(
@@ -320,10 +320,13 @@ pub async fn start_sync_pipeline(
             current_lease,
         )
         .await;
-        dbg!(sync_partition_lock_records);
+        dbg!(&sync_partition_lock_records);
 
-        dbg!(&dynamo_db_client);
-        get_sync_records_for_partitions().await;
+        let records =
+            get_sync_records_for_partitions(dynamo_db_client.clone(), sync_partition_lock_records)
+                .await;
+        dbg!(&records);
+
         tokio::time::sleep(Duration::from_secs(20)).await;
     }
 }
