@@ -7,7 +7,7 @@ use tracing::{event, Level};
 use crate::{
     aws::get_sync_records_for_partitions,
     cluster_management::{
-        get_worker_records_and_establish_locks, initialise_lease_and_node_membership,
+        establish_correct_sync_partition_locks, initialise_lease_and_node_membership,
     },
     etcd::EtcdClients,
 };
@@ -231,7 +231,7 @@ pub async fn do_some_stuff_with_etcd_and_init(
 
 /// Manage cluster membership recording
 ///
-/// Uses [record_node_membership] and various lease functions.
+/// Uses [initialise_lease_and_node_membership] and various lease functions.
 ///
 /// Doesn't return a result, so that it can run nicely in a separate tokio task. Will just retry
 /// the whole thing if any part fails.
@@ -314,7 +314,7 @@ pub async fn start_sync_pipeline(
     dynamo_db_client: aws_sdk_dynamodb::Client,
 ) {
     loop {
-        let sync_partition_lock_records = get_worker_records_and_establish_locks(
+        let sync_partition_lock_records = establish_correct_sync_partition_locks(
             &mut etcd_clients.kv,
             node_name.as_str(),
             current_lease,
