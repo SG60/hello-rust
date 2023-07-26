@@ -4,7 +4,7 @@ use anyhow::Result;
 use aws::get_users;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, event, info_span, Instrument, Level};
+use tracing::{debug_span, error, event, info_span, Instrument, Level};
 
 use crate::{
     aws::get_sync_records_for_partitions,
@@ -359,6 +359,12 @@ pub async fn start_sync_pipeline(
             )
             .await?;
 
+            // NOTE: This should run in a task
+            // see:
+            // https://medium.com/@polyglot_factotum/rust-concurrency-a-streaming-workflow-served-with-a-side-of-back-pressure-955bdf0266b5
+            //
+            // TODO: communicate between source and processor over channels
+            // could use this: https://docs.rs/async-channel/latest/async_channel/
             for i in db_sync_records {
                 let single_sync_job_span = info_span!("single sync job");
                 async {
@@ -393,7 +399,9 @@ pub async fn start_sync_pipeline(
                 .await;
             }
 
-            tokio::time::sleep(Duration::from_secs(20)).await;
+            tokio::time::sleep(Duration::from_secs(20))
+                .instrument(debug_span!("artificial sleep time"))
+                .await;
 
             anyhow::Ok(())
         }
