@@ -3,7 +3,7 @@
 
 use once_cell::sync::Lazy;
 use thiserror::Error;
-use tracing::{event, info, Instrument, Level};
+use tracing::{debug, error, trace, Instrument};
 
 use crate::{do_with_retries, etcd};
 
@@ -38,17 +38,12 @@ pub async fn initialise_lease_and_node_membership(
 ) -> Result<etcd::LeaseGrantResponse> {
     let lease = do_with_retries(|| crate::etcd::create_lease(etcd_clients.lease.clone())).await;
 
-    event!(
-        Level::TRACE,
-        etcd_lease_id = lease.id,
-        "current lease: {:#?}",
-        lease.id
-    );
+    trace!(etcd_lease_id = lease.id, "current lease: {:#?}", lease.id);
 
     record_node_membership(&mut etcd_clients.clone(), lease.id, node_name.clone())
         .await
         .map_err(|e| {
-            event!(Level::ERROR, "{:#?}", e);
+            error!("{:#?}", e);
             e
         })?;
 
@@ -249,15 +244,11 @@ pub async fn update_n_sync_lock_records(
 
     while let Some(res) = join_set.join_next().await {
         res.unwrap().unwrap();
-        info!("a kv record removal or creation job finished");
     }
 
-    event!(
-        Level::DEBUG,
+    debug!(
         workers_count,
-        worker_id,
-        current_worker_index,
-        n_sync_records_to_claim
+        worker_id, current_worker_index, n_sync_records_to_claim
     );
 
     Ok(())
@@ -346,14 +337,9 @@ pub async fn establish_correct_sync_partition_locks(
             })
             .collect();
 
-        event!(
-            Level::DEBUG,
+        debug!(
             workers_count,
-            node_name,
-            current_lease,
-            current_worker_index,
-            "kvs strings: {:#?}",
-            mapped_kv
+            node_name, current_lease, current_worker_index, "kvs strings: {:#?}", mapped_kv
         );
 
         sync_partitions
