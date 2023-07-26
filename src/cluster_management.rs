@@ -5,7 +5,7 @@ use once_cell::sync::Lazy;
 use thiserror::Error;
 use tracing::{debug, error, trace, Instrument};
 
-use crate::{do_with_retries, etcd};
+use crate::{do_with_retries_infinite, etcd};
 
 use crate::etcd::{
     etcdserverpb::{PutResponse, RangeResponse},
@@ -36,7 +36,8 @@ pub async fn initialise_lease_and_node_membership(
     etcd_clients: EtcdClients,
     node_name: String,
 ) -> Result<etcd::LeaseGrantResponse> {
-    let lease = do_with_retries(|| crate::etcd::create_lease(etcd_clients.lease.clone())).await;
+    let lease =
+        do_with_retries_infinite(|| crate::etcd::create_lease(etcd_clients.lease.clone())).await;
 
     trace!(etcd_lease_id = lease.id, "current lease: {:#?}", lease.id);
 

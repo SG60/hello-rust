@@ -4,7 +4,9 @@ use anyhow::Result;
 use aws::get_users;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, debug_span, error, event, info_span, Instrument, Level};
+use tracing::{
+    debug, debug_span, error, event, info_span, instrument, trace, warn, Instrument, Level,
+};
 
 use crate::{
     aws::get_sync_records_for_partitions,
@@ -176,7 +178,7 @@ pub async fn get_some_data_from_google_calendar(
     Ok(res)
 }
 
-pub async fn do_with_retries<A, Fut, E, F: Fn() -> Fut>(f: F) -> A
+pub async fn do_with_retries_infinite<A, Fut, E, F: Fn() -> Fut>(f: F) -> A
 where
     E: std::error::Error,
     Fut: Future<Output = Result<A, E>>,
@@ -206,6 +208,58 @@ where
 }
 
 #[derive(Debug)]
+struct RetryConfig {
+    maximum_backoff: Duration,
+    maximum_n_tries: Option<u32>,
+    initial_duration: Duration,
+}
+impl Default for RetryConfig {
+    fn default() -> Self {
+        Self {
+            maximum_backoff: Duration::from_secs(30),
+            maximum_n_tries: None,
+            initial_duration: Duration::from_millis(5),
+        }
+    }
+}
+
+#[instrument(err(Debug), skip(f), level = "trace")]
+async fn do_with_retries<A, Fut, E, F: Fn() -> Fut>(f: F, config: RetryConfig) -> Result<A, E>
+where
+    E: std::error::Error,
+    Fut: Future<Output = Result<A, E>>,
+{
+    let mut n_tries = 0;
+    let mut retry_wait_duration = config.initial_duration;
+
+    loop {
+        let result = f().await;
+
+        match result {
+            Err(error) => {
+                n_tries += 1;
+
+                trace!(n_tries, "{}", error);
+
+                if let Some(max) = config.maximum_n_tries {
+                    if n_tries == max {
+                        break Err(error);
+                    };
+                }
+
+                tokio::time::sleep(retry_wait_duration).await;
+                if retry_wait_duration < config.maximum_backoff {
+                    retry_wait_duration *= 2;
+                };
+            }
+            Ok(result) => {
+                break Ok(result);
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct InitAndEtcdTaskReturn {
     pub etcd_clients: EtcdClients,
     pub result_of_tokio_task: tokio::task::JoinHandle<()>,
@@ -219,7 +273,8 @@ pub async fn do_some_stuff_with_etcd_and_init(
     shutdown_receiver: tokio::sync::watch::Receiver<()>,
 ) -> cluster_management::Result<InitAndEtcdTaskReturn> {
     event!(Level::INFO, "Initialising etcd grpc clients");
-    let etcd_clients = do_with_retries(|| EtcdClients::connect(etcd_endpoint.to_owned())).await;
+    let etcd_clients =
+        do_with_retries_infinite(|| EtcdClients::connect(etcd_endpoint.to_owned())).await;
 
     let result_of_tokio_task = tokio::spawn(manage_cluster_node_membership_and_start_work(
         etcd_clients.clone(),
