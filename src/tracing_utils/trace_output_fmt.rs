@@ -1,3 +1,4 @@
+use opentelemetry::trace::TraceContextExt;
 use serde::ser::{SerializeMap, Serializer as _};
 use std::io;
 use tracing::{Event, Subscriber};
@@ -59,7 +60,7 @@ where
                 trace_id: o
                     .builder
                     .trace_id
-                    .unwrap_or(opentelemetry::trace::TraceId::INVALID)
+                    .unwrap_or(o.parent_cx.span().span_context().trace_id())
                     .to_string(),
                 span_id: o
                     .builder
