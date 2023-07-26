@@ -7,7 +7,7 @@ default:
 j:
     just --choose
 
-run $NO_OTLP="1":
+run:
     cargo run
 
 # run the `fun` binary
@@ -81,10 +81,13 @@ backend_etcd_related_env := "HOSTNAME=" + uuid() + " APP_ETCD_URL=http://localho
 run-with-etcd:
   {{backend_etcd_related_env}} just run
 
-dev $RUST_LOG="hello_rust_backend=debug":
-  cargo watch -s "just run-with-etcd"
+export RUST_LOG := "hello_rust_backend=debug"
+export NO_OTLP := "1"
 
-run-with-etcd-and-otlp:
+dev:
+  {{backend_etcd_related_env}} cargo watch -x run
+
+run-with-etcd-and-otlp $NO_OTLP="0":
   {{backend_etcd_related_env}} cargo run
 
 run-for-tokio-console $RUSTFLAGS="--cfg tokio_unstable" $NO_OTLP="1":
