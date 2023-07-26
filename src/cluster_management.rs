@@ -3,7 +3,7 @@
 
 use once_cell::sync::Lazy;
 use thiserror::Error;
-use tracing::{event, trace, Level};
+use tracing::{event, info, Instrument, Level};
 
 use crate::{do_with_retries, etcd};
 
@@ -119,7 +119,7 @@ pub async fn get_all_sync_lock_records(kv_client: &mut KvClient) -> Result<Range
 }
 
 /// Create a KV record in etcd to represent a worker lock for this worker
-#[tracing::instrument]
+#[tracing::instrument(level = "trace")]
 pub async fn create_a_sync_lock_record(
     kv_client: &mut KvClient,
     current_lease: i64,
@@ -159,7 +159,7 @@ pub async fn create_a_sync_lock_record(
 }
 
 /// Remove a KV record in etcd if it is owned by this worker
-#[tracing::instrument]
+#[tracing::instrument(level = "trace")]
 pub async fn remove_sync_lock_if_owned(
     kv_client: &mut KvClient,
     worker_id: String,
@@ -214,24 +214,42 @@ pub async fn update_n_sync_lock_records(
         workers_count,
     );
 
-    let sync_records_to_claim = sync_records_to_claim_or_not.do_claim;
+    let n_sync_records_to_claim = sync_records_to_claim_or_not.do_claim.len();
 
-    trace!("{:?}", &sync_records_to_claim);
-
-    let n_sync_records_to_claim = sync_records_to_claim.len();
+    let mut join_set = tokio::task::JoinSet::new();
 
     for i in sync_records_to_claim_or_not.no_claim {
-        remove_sync_lock_if_owned(kv_client, worker_id.to_owned(), &i.to_string()).await?;
+        let mut kv_client = kv_client.clone();
+        let worker_id = worker_id.clone();
+        join_set.spawn(
+            async move {
+                remove_sync_lock_if_owned(&mut kv_client, worker_id.to_owned(), &i.to_string())
+                    .await
+            }
+            .in_current_span(),
+        );
     }
 
-    for i in sync_records_to_claim {
-        create_a_sync_lock_record(
-            kv_client,
-            current_lease,
-            worker_id.to_owned(),
-            &i.to_string(),
-        )
-        .await?;
+    for i in sync_records_to_claim_or_not.do_claim {
+        let mut kv_client = kv_client.clone();
+        let worker_id = worker_id.clone();
+        join_set.spawn(
+            async move {
+                create_a_sync_lock_record(
+                    &mut kv_client,
+                    current_lease,
+                    worker_id.to_owned(),
+                    &i.to_string(),
+                )
+                .await
+            }
+            .in_current_span(),
+        );
+    }
+
+    while let Some(res) = join_set.join_next().await {
+        res.unwrap().unwrap();
+        info!("a kv record removal or creation job finished");
     }
 
     event!(
