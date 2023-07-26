@@ -4,7 +4,7 @@ use anyhow::Result;
 use aws::get_users;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
-use tracing::{debug_span, error, event, info_span, Instrument, Level};
+use tracing::{debug, debug_span, error, event, info_span, Instrument, Level};
 
 use crate::{
     aws::get_sync_records_for_partitions,
@@ -328,7 +328,7 @@ pub async fn start_sync_pipeline(
 ) -> Result<std::convert::Infallible> {
     let start_span = info_span!("set up pipeline");
 
-    let (reqwest_client, mut user_creds) = start_span.in_scope(|| {
+    let (_reqwest_client, mut user_creds) = start_span.in_scope(|| {
         // Client is cheap to clone and uses a pool, so it is better to just use one for everything!
         let reqwest_client = reqwest::Client::new();
 
@@ -345,7 +345,7 @@ pub async fn start_sync_pipeline(
         let pipeline_span = info_span!("sync pipeline");
         pipeline_span.follows_from(&start_span);
 
-        async {
+        let sync_job = async {
             let sync_partition_lock_records = establish_correct_sync_partition_locks(
                 &mut etcd_clients.kv,
                 node_name.as_str(),
@@ -394,6 +394,8 @@ pub async fn start_sync_pipeline(
                     println!("THEN COMPARE -> THIS IS THE KEY LOGIC");
 
                     println!("MAKE ANY REQUIRED CHANGES");
+
+                    debug!("end of single sync pipeline");
                 }
                 .instrument(single_sync_job_span)
                 .await;
@@ -404,9 +406,23 @@ pub async fn start_sync_pipeline(
                 .await;
 
             anyhow::Ok(())
+        };
+
+        async {
+            let result = sync_job.await;
+            result.map_err(|e| {
+                error!(error = %e, "error!!!!! (this is the one at the end)");
+                e
+            })
         }
         .instrument(pipeline_span)
         .await?;
+        // .instrument(pipeline_span)
+        // .await
+        // .map_err(|e| {
+        //     error!(error = %e, "error!!!!! (this is the one at the end)");
+        //     e
+        // })?;
     }
 }
 

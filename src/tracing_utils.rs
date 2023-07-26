@@ -37,7 +37,10 @@ pub fn set_up_logging() -> Result<()> {
         .install_batch(opentelemetry::runtime::TokioCurrentThread)?;
 
     // Create a tracing layer with the configured tracer
-    let opentelemetry = tracing_opentelemetry::layer().with_tracer(tracer);
+    let opentelemetry = tracing_opentelemetry::layer()
+        .with_exception_fields(true)
+        .with_exception_field_propagation(true)
+        .with_tracer(tracer);
 
     let fmt_layer = fmt::Layer::default().json().event_format(JsonWithTraceId);
 
