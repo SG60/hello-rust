@@ -128,7 +128,7 @@ pub async fn get_sync_records(client: &Client) -> Result<Vec<SyncRecord>, Dynamo
     Ok(sync_records)
 }
 
-#[tracing::instrument]
+#[tracing::instrument(level = "trace")]
 async fn get_sync_records_for_one_partition(
     client: &Client,
     partition: u16,
@@ -155,10 +155,11 @@ async fn get_sync_records_for_one_partition(
     Ok(sync_records)
 }
 
-#[tracing::instrument]
+#[tracing::instrument(ret, err)]
 pub async fn get_sync_records_for_partitions(
     client: Client,
     partitions: Vec<u16>,
+    // ) -> Result<Vec<SyncRecord>, DynamoClientError> {
 ) -> Result<Vec<SyncRecord>, DynamoClientError> {
     let mut set = JoinSet::new();
 

@@ -2,6 +2,6 @@
 
 use anyhow::Result;
 
-fn get_all_pages_from_notion_db(arg: i32) -> Result<()> {
+fn get_all_pages_from_notion_db() -> Result<()> {
     unimplemented!();
 }
