@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 use anyhow::Result;
 use aws_sdk_dynamodb::{error::QueryError, model::AttributeValue, types::SdkError, Client};
@@ -9,6 +9,8 @@ use tokio::task::JoinSet;
 use tokio_stream::StreamExt;
 use tracing::{trace, Instrument};
 use typeshare::typeshare;
+
+use crate::{do_with_retries, RetryConfig};
 
 #[tracing::instrument]
 pub async fn load_client() -> Client {
@@ -166,10 +168,26 @@ pub async fn get_sync_records_for_partitions(
     // TODO: there should possibly be some exponential retry logic with these, incase of rate
     // limiting from DynamoDB. But it should limit the number of tries, and then just return an
     // error after that limit.
+
+    let mut interval = tokio::time::interval(Duration::from_millis(20)); // see note below about this
     for i in partitions {
+        // add a small delay before successive task spawns, to avoid overloading DynamoDB capacity
+        interval.tick().await; // ticks immediately on the first time
+
         let client = client.clone();
         set.spawn(
-            async move { get_sync_records_for_one_partition(&client, i).await }.in_current_span(),
+            async move {
+                do_with_retries(
+                    || get_sync_records_for_one_partition(&client, i),
+                    RetryConfig {
+                        maximum_backoff: Duration::from_secs(10),
+                        maximum_n_tries: Some(10),
+                        ..Default::default()
+                    },
+                )
+                .await
+            }
+            .in_current_span(),
         );
     }
 
