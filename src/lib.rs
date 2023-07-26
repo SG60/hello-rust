@@ -1,8 +1,9 @@
 use std::{future::Future, time::Duration};
 
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
-use tracing::{event, Level};
+use tracing::{error, event, Level};
 
 use crate::{
     aws::get_sync_records_for_partitions,
@@ -283,8 +284,17 @@ async fn manage_cluster_node_membership_and_start_work(
                             println!("Error with lease_keep_alive, will create a new lease")
                         };
                     },
-                    _ = run_work_join_handle => {
+                    handle = run_work_join_handle => {
                         dbg!("run_work_join_handle completed!");
+                        match handle.expect("join result should be valid") {
+                            Ok(inner) => {
+                                dbg!{inner};
+                            },
+                            Err(error) => {
+                                error!{"Error in running work"};
+                                dbg!{error};
+                            },
+                        };
                         break
                     },
                     _ = token.cancelled() => {
@@ -312,7 +322,7 @@ pub async fn start_sync_pipeline(
     node_name: String,
     current_lease: i64,
     dynamo_db_client: aws_sdk_dynamodb::Client,
-) {
+) -> Result<std::convert::Infallible> {
     loop {
         let sync_partition_lock_records = establish_correct_sync_partition_locks(
             &mut etcd_clients.kv,
@@ -320,12 +330,16 @@ pub async fn start_sync_pipeline(
             current_lease,
         )
         .await;
-        dbg!(&sync_partition_lock_records);
 
-        let records =
+        let db_sync_records =
             get_sync_records_for_partitions(dynamo_db_client.clone(), sync_partition_lock_records)
-                .await;
-        dbg!(&records);
+                .await?;
+
+        for i in db_sync_records {
+            dbg!(&i);
+
+            dbg!(i.notion_database);
+        }
 
         tokio::time::sleep(Duration::from_secs(20)).await;
     }
