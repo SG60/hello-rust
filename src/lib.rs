@@ -1,9 +1,10 @@
-use std::{future::Future, time::Duration};
+use std::{collections::HashMap, future::Future, time::Duration};
 
 use anyhow::Result;
+use aws::get_users;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
-use tracing::{error, event, Level};
+use tracing::{error, event, info_span, Instrument, Level};
 
 use crate::{
     aws::get_sync_records_for_partitions,
@@ -18,6 +19,8 @@ pub mod cluster_management;
 pub mod etcd;
 pub mod notion_api;
 pub mod settings;
+mod source_gcal;
+mod source_notion;
 pub mod tracing_utils;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -323,25 +326,79 @@ pub async fn start_sync_pipeline(
     current_lease: i64,
     dynamo_db_client: aws_sdk_dynamodb::Client,
 ) -> Result<std::convert::Infallible> {
+    let start_span = info_span!("set up pipeline");
+
+    let (reqwest_client, mut user_creds) = start_span.in_scope(|| {
+        // Client is cheap to clone and uses a pool, so it is better to just use one for everything!
+        let reqwest_client = reqwest::Client::new();
+
+        let user_creds: HashMap<String, aws::UserRecord> = HashMap::new();
+
+        (reqwest_client, user_creds)
+    });
+
+    // NOTE: THIS IS JUST HERE FOR TESTING
+    let users = get_users(&dynamo_db_client).await?;
+    dbg!(users);
+
     loop {
-        let sync_partition_lock_records = establish_correct_sync_partition_locks(
-            &mut etcd_clients.kv,
-            node_name.as_str(),
-            current_lease,
-        )
-        .await;
+        let pipeline_span = info_span!("sync pipeline");
+        pipeline_span.follows_from(&start_span);
 
-        let db_sync_records =
-            get_sync_records_for_partitions(dynamo_db_client.clone(), sync_partition_lock_records)
-                .await?;
+        async {
+            let sync_partition_lock_records = establish_correct_sync_partition_locks(
+                &mut etcd_clients.kv,
+                node_name.as_str(),
+                current_lease,
+            )
+            .await;
 
-        for i in db_sync_records {
-            dbg!(&i);
+            let db_sync_records = get_sync_records_for_partitions(
+                dynamo_db_client.clone(),
+                sync_partition_lock_records,
+            )
+            .await?;
 
-            dbg!(i.notion_database);
+            for i in db_sync_records {
+                let single_sync_job_span = info_span!("single sync job");
+                async {
+                    dbg!(&i);
+
+                    let user_id = i.user_id.clone();
+
+                    let current_user_creds = user_creds.get(&user_id);
+                    let current_user_creds = match current_user_creds {
+                        None => {
+                            let user =
+                                aws::get_single_user(&dynamo_db_client, user_id.clone()).await;
+                            user_creds.insert(user_id.clone(), user.unwrap());
+                            user_creds.get(&user_id).unwrap()
+                        }
+                        Some(u) => u,
+                    };
+
+                    dbg!(current_user_creds);
+
+                    println!("SHOULD GET NOTION DATA FOR THIS USER");
+
+                    println!(
+                        "THEN GET GOOGLE CALENDAR RECENTLY EDITED STUFF (USING SYNC ENDPOINT?)"
+                    );
+
+                    println!("THEN COMPARE -> THIS IS THE KEY LOGIC");
+
+                    println!("MAKE ANY REQUIRED CHANGES");
+                }
+                .instrument(single_sync_job_span)
+                .await;
+            }
+
+            tokio::time::sleep(Duration::from_secs(20)).await;
+
+            anyhow::Ok(())
         }
-
-        tokio::time::sleep(Duration::from_secs(20)).await;
+        .instrument(pipeline_span)
+        .await?;
     }
 }
 

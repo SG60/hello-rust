@@ -1,11 +1,13 @@
+use std::collections::HashMap;
+
 use anyhow::Result;
 use aws_sdk_dynamodb::{error::QueryError, model::AttributeValue, types::SdkError, Client};
 use serde::{Deserialize, Serialize};
-use serde_dynamo::from_items;
+use serde_dynamo::{from_item, from_items};
 use thiserror::Error;
 use tokio::task::JoinSet;
 use tokio_stream::StreamExt;
-use tracing::trace;
+use tracing::{trace, Instrument};
 use typeshare::typeshare;
 
 #[tracing::instrument]
@@ -37,6 +39,28 @@ pub async fn get_users(client: &Client) -> Result<Vec<UserRecord>, DynamoClientE
     let users = from_items(items)?;
 
     Ok(users)
+}
+
+#[tracing::instrument]
+pub async fn get_single_user(
+    client: &Client,
+    user_id: String,
+) -> Result<UserRecord, DynamoClientError> {
+    let item = client
+        .get_item()
+        .table_name("tasks")
+        .set_key(Some(HashMap::from([
+            ("userId".to_owned(), AttributeValue::S(user_id)),
+            ("SK".to_owned(), AttributeValue::S("userDetails".to_owned())),
+        ])))
+        .send()
+        .await?;
+
+    let item = item.item().unwrap();
+
+    let user = from_item(item.to_owned())?;
+
+    Ok(user)
 }
 
 #[typeshare]
@@ -143,7 +167,9 @@ pub async fn get_sync_records_for_partitions(
     // error after that limit.
     for i in partitions {
         let client = client.clone();
-        set.spawn(async move { get_sync_records_for_one_partition(&client, i).await });
+        set.spawn(
+            async move { get_sync_records_for_one_partition(&client, i).await }.in_current_span(),
+        );
     }
 
     let mut sync_records = vec![];
@@ -191,6 +217,11 @@ pub enum DynamoClientError {
     DynamoQueryError {
         #[from]
         source: SdkError<QueryError>,
+    },
+    #[error("DynamoDB Get Item Error")]
+    DynamoGetItemError {
+        #[from]
+        source: SdkError<aws_sdk_dynamodb::error::GetItemError>,
     },
     #[error("DynamoDB Serde Deserialization Error")]
     SerdeError {
