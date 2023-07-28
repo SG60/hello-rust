@@ -53,14 +53,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      # - name: Install Arm C/C++ compiler
-      #   run: sudo apt install -y g++-aarch64-linux-gnu
-      # selecting a toolchain either by action or manual `rustup` calls should happen
-      # before the plugin, as the cache uses the current rustc version as its cache key
-      # - run: rustup target add aarch64-unknown-linux-gnu
-
       - run: |
-          ls -a ~/.rustup
           ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib
 
       - name: Generate toolchain cache key
@@ -70,12 +63,12 @@ jobs:
         shell: bash
 
       - uses: actions/cache@v3
+        name: Cache rust toolchains and targets
         with:
           path: ~/.rustup/toolchains
           key: ${{ runner.os }}-${{ steps.get-toolchain-cache-key.outputs.hash }}
 
       - run: |
-          ls -a ~/.rustup
           ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib
 
       - uses: Swatinem/rust-cache@v2
@@ -89,7 +82,6 @@ jobs:
           cross build --target=aarch64-unknown-linux-gnu --release
 
       - run: |
-          ls -a ~/.rustup
           ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib
 
       - name: Set up Docker Context for Buildx
