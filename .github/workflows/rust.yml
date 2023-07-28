@@ -57,7 +57,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - run: |
-          ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src
+          ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib
         continue-on-error: true
 
       - name: Generate toolchain cache key
@@ -75,9 +75,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.rust-target }}
+          # 'rust-src' is downloaded by cross for some reason
+          components: rust-src
 
       - run: |
-          ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src
+          ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib
         continue-on-error: true
 
       - uses: Swatinem/rust-cache@v2
@@ -91,7 +93,7 @@ jobs:
           cross build --target=${{ matrix.rust-target }} --release
 
       - run: |
-          ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src
+          ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib
         continue-on-error: true
 
       - name: Set up Docker Context for Buildx
