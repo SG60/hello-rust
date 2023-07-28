@@ -64,14 +64,18 @@ jobs:
           cache-on-failure: "true"
       - run: cargo install cross
 
-      - run: ls -a ~/.rustup
+      - run: |
+          ls -a ~/.rustup
+          ls -a ~/.rustup/toolchains
 
       - uses: rui314/setup-mold@v1
       - name: Build
         run: |
           cross build --target=aarch64-unknown-linux-gnu --release
 
-      - run: ls -a ~/.rustup
+      - run: |
+          ls -a ~/.rustup
+          ls -a ~/.rustup/toolchains
 
       - name: Set up Docker Context for Buildx
         id: buildx-context
