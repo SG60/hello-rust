@@ -121,7 +121,8 @@ jobs:
             # set latest tag for default branch
             # type=raw,value=latest,enable={{is_default_branch}}
             # test version to try out with branch
-            # type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'better-docker-image-tagging') }}
+            # TODO: REMOVE THIS
+            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'better-docker-image-tagging') }}
 
       - name: Build Dockerfile
         id: build-and-push-action-1
@@ -164,10 +165,9 @@ jobs:
 
       - name: Job summary info (as markdown)
         run: |
-          echo "# Built image info:" >> $GITHUB_STEP_SUMMARY
-          echo "- image digest: ${{ steps.build-and-push-action.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
-          echo "- image metadata: ${{ steps.build-and-push-action.outputs.metadata }}" >> $GITHUB_STEP_SUMMARY
-          echo "- revision (commit-sha): ${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "# Built image info" >> $GITHUB_STEP_SUMMARY
+          echo "- image digest: `${{ steps.build-and-push-action.outputs.digest }}`" >> $GITHUB_STEP_SUMMARY
+          echo "- revision (commit-sha): `${{ steps.meta.outputs.tags }}`" >> $GITHUB_STEP_SUMMARY
           echo "- default branch in repo: ${{ github.event.repository.default_branch }}" >> $GITHUB_STEP_SUMMARY
 
     outputs:
