@@ -90,8 +90,8 @@ jobs:
           load: true
           tags: cross-docker-image:tag
           build-args: CROSS_BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.rust-target }}:latest
-          cache-from: type=gha
-          cache-to: type=gha
+          cache-from: type=gha,scope=cross-docker-image
+          cache-to: type=gha,scope=cross-docker-image
 
       - uses: rui314/setup-mold@v1
       - name: Build binary of project using cross
