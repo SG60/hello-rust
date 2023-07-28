@@ -66,12 +66,6 @@ jobs:
           echo "hash=$(rustc --version)" >> $GITHUB_OUTPUT
         shell: bash
 
-      # - uses: actions/cache@v3
-      #   name: Cache rust toolchains and targets
-      #   with:
-      #     path: ~/.rustup/toolchains
-      #     key: ${{ runner.os }}-${{ steps.get-toolchain-cache-key.outputs.hash }}
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.rust-target }}
@@ -87,21 +81,21 @@ jobs:
           cache-on-failure: "true"
       - run: cargo install cross
 
-      - name: Set up Docker Context for Buildx
-        id: buildx-context
-        run: |
-          docker context create builders
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v2
-        with:
-          version: v0.9.1
-          endpoint: builders
+      # - name: Set up Docker Context for Buildx
+      #   id: buildx-context
+      #   run: |
+      #     docker context create builders
+      # - name: Set up Docker Buildx
+      #   id: buildx
+      #   uses: docker/setup-buildx-action@v2
+      #   with:
+      #     version: v0.9.1
+      #     endpoint: builders
 
       - name: Build Docker image for cross
         run: |
           export BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.rust-target }}:latest
-          docker build -t cross-docker-image:tag -f ./CrossDockerfile --build-arg CROSS_BASE_IMAGE=$BASE_IMAGE
+          docker build -t cross-docker-image:tag -f ./CrossDockerfile --build-arg CROSS_BASE_IMAGE=$BASE_IMAGE .
 
       - uses: rui314/setup-mold@v1
       - name: Build binary of project using cross
