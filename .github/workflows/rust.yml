@@ -91,7 +91,7 @@ jobs:
         run: |
           export BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.rust-target }}:latest
           docker build -t cross-docker-image:tag -f ./CrossDockerfile \
-            --cache-from=type=gha --cache-to=type=gha \
+            --cache-from=type=gha --cache-to=type=gha --load \
             --build-arg CROSS_BASE_IMAGE=$BASE_IMAGE .
 
       - uses: rui314/setup-mold@v1
