@@ -122,7 +122,7 @@ jobs:
             # type=raw,value=latest,enable={{is_default_branch}}
             # test version to try out with branch
             # TODO: REMOVE THIS
-            type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'better-docker-image-tagging') }}
+            type=raw,value=latest,enable=${{ github.ref_name == 'better-docker-image-tagging' }}
 
       - name: Build Dockerfile
         id: build-and-push-action-1
@@ -166,9 +166,11 @@ jobs:
       - name: Job summary info (as markdown)
         run: |
           echo "# Built image info" >> $GITHUB_STEP_SUMMARY
-          echo "- image digest: `${{ steps.build-and-push-action.outputs.digest }}`" >> $GITHUB_STEP_SUMMARY
-          echo "- revision (commit-sha): `${{ steps.meta.outputs.tags }}`" >> $GITHUB_STEP_SUMMARY
-          echo "- default branch in repo: ${{ github.event.repository.default_branch }}" >> $GITHUB_STEP_SUMMARY
+          echo "- image digest: \`${{ steps.build-and-push-action.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- revision (commit-sha): \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## tags" >> $GITHUB_STEP_SUMMARY
+          echo "\`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
 
     outputs:
       docker-image-published-digest: ${{ steps.build-and-push-action.outputs.digest }}
@@ -196,6 +198,7 @@ jobs:
         # in 'prod' folder
         run: |
           cd k8s/prod
+          ${{ steps.kustomize-installation.outputs.KUSTOMIZE_COMMAND }} edit set image ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}@${{ needs.build.outputs.docker-image-published-digest }}
           ${{ steps.kustomize-installation.outputs.KUSTOMIZE_COMMAND }} edit set image ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}@${{ needs.build.outputs.docker-image-published-digest }}
 
       - name: Commit to git
