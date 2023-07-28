@@ -66,10 +66,6 @@ jobs:
       #     # 'rust-src' is downloaded by cross for some reason
       #     components: rust-src
 
-      - run: |
-          ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib
-        continue-on-error: true
-
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: "true"
