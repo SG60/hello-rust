@@ -59,14 +59,29 @@ jobs:
       # before the plugin, as the cache uses the current rustc version as its cache key
       # - run: rustup target add aarch64-unknown-linux-gnu
 
+      - run: |
+          ls -a ~/.rustup
+          ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib
+
+      - name: Generate toolchain cache key
+        id: get-toolchain-cache-key
+        run: |
+          echo "hash=$(rustc --version)" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - uses: actions/cache@v3
+        with:
+          path: ~/.rustup/toolchains
+          key: ${{ runner.os }}-${{ steps.get-toolchain-cache-key.outputs.hash }}
+
+      - run: |
+          ls -a ~/.rustup
+          ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib
+
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: "true"
       - run: cargo install cross
-
-      - run: |
-          ls -a ~/.rustup
-          ls -a ~/.rustup/toolchains
 
       - uses: rui314/setup-mold@v1
       - name: Build
@@ -75,7 +90,7 @@ jobs:
 
       - run: |
           ls -a ~/.rustup
-          ls -a ~/.rustup/toolchains
+          ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib
 
       - name: Set up Docker Context for Buildx
         id: buildx-context
