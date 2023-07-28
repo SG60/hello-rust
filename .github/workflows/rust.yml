@@ -98,7 +98,7 @@ jobs:
       #     version: v0.9.1
       #     endpoint: builders
 
-      - run: docker build -t hello-rust/cross-docker:tag -f ./CrossDockerfile .
+      - run: docker build -t cross-docker-image:tag -f ./CrossDockerfile .
 
       - uses: rui314/setup-mold@v1
       - name: Build
