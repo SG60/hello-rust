@@ -122,7 +122,7 @@ jobs:
             # type=raw,value=latest,enable={{is_default_branch}}
             # test version to try out with branch
             # TODO: REMOVE THIS
-            type=raw,value=latest,enable=${{ github.ref_name == 'better-docker-image-tagging' }}
+            type=raw,value=latest,enable=${{ github.head_ref == 'better-docker-image-tagging' }}
 
       - name: Build Dockerfile
         id: build-and-push-action-1
@@ -177,11 +177,11 @@ jobs:
 
     outputs:
       docker-image-published-digest: ${{ steps.build-and-push-action.outputs.digest }}
-      docker-image-published-tag: ${{ steps.meta.outputs.tags }}
+      app-version: ${{github.sha}}
 
   deploy:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    # if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
     needs: [build, clippy, test]
     steps:
       - uses: actions/checkout@v3
@@ -202,7 +202,14 @@ jobs:
         run: |
           cd k8s/prod
           ${{ steps.kustomize-installation.outputs.KUSTOMIZE_COMMAND }} edit set image ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}@${{ needs.build.outputs.docker-image-published-digest }}
-          ${{ steps.kustomize-installation.outputs.KUSTOMIZE_COMMAND }} edit set image ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}@${{ needs.build.outputs.docker-image-published-digest }}
+          # update version label
+          echo "apiVersion: apps/v1
+          kind: Deployment
+          metadata:
+            name: hello-rust-backend
+            labels:
+              app.kubernetes.io/version: ${{ needs.build.outputs.app-version }}
+          " > ./generated/labels.patch.yaml
 
       - name: Commit to git
         run: |
