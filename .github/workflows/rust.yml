@@ -70,6 +70,7 @@ jobs:
 
       - run: |
           ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src
+        continue-on-error: true
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -83,6 +84,7 @@ jobs:
 
       - run: |
           ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/src
+        continue-on-error: true
 
       - name: Set up Docker Context for Buildx
         id: buildx-context
