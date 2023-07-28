@@ -96,10 +96,6 @@ jobs:
         run: |
           cross build --target=${{ matrix.rust-target }} --release
 
-      - run: |
-          ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib
-        continue-on-error: true
-
       - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
