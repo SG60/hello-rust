@@ -56,6 +56,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - run: |
+          ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib
+        continue-on-error: true
+
       # - uses: dtolnay/rust-toolchain@stable
       #   with:
       #     targets: ${{ matrix.rust-target }}
@@ -87,7 +91,7 @@ jobs:
           push: false
           load: true
           tags: cross-docker-image:tag
-          build-args: ghcr.io/cross-rs/${{ matrix.rust-target }}:latest
+          build-args: CROSS_BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.rust-target }}:latest
           cache-from: type=gha
           cache-to: type=gha
 
