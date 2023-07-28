@@ -110,14 +110,14 @@ jobs:
           images: |
             ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}
           tags: |
-            # Short git commit sha
-            type=sha
             type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             # An edge tag reflects the last commit of the active branch on your Git repository
             type=edge
+            # Short git commit sha
+            type=sha
             # set latest tag for default branch
             # type=raw,value=latest,enable={{is_default_branch}}
             # test version to try out with branch
@@ -134,7 +134,7 @@ jobs:
           # doesn't need to have the correct final tag or labels here, this build just puts
           # something in the local cache rather than pushing it. Correct tags and labels
           # are set in the next docker/build-push-action
-          tags: latest
+          tags: built-unscanned-image
           cache-from: type=gha
           cache-to: type=local,dest=buildkit-docker-cache-location
           platforms: linux/arm64
@@ -142,7 +142,7 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ steps.meta.outputs.tags }}
+          image-ref: ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}@built-unscanned-image
           format: "table"
           exit-code: "1"
           ignore-unfixed: true
