@@ -98,10 +98,13 @@ jobs:
       #     version: v0.9.1
       #     endpoint: builders
 
-      - run: docker build -t cross-docker-image:tag -f ./CrossDockerfile .
+      - name: Build Docker image for cross
+        run: |
+          export BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.rust-target }}:latest
+          docker build -t cross-docker-image:tag -f ./CrossDockerfile --build-arg CROSS_BASE_IMAGE=$BASE_IMAGE
 
       - uses: rui314/setup-mold@v1
-      - name: Build
+      - name: Build binary of project using cross
         run: |
           cross build --target=${{ matrix.rust-target }} --release
 
