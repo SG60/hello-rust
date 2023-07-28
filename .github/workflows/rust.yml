@@ -119,10 +119,7 @@ jobs:
             # Short git commit sha
             type=sha
             # set latest tag for default branch
-            # type=raw,value=latest,enable={{is_default_branch}}
-            # test version to try out with branch
-            # TODO: REMOVE THIS
-            type=raw,value=latest,enable=${{ github.head_ref == 'better-docker-image-tagging' }}
+            type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build Dockerfile
         id: build-and-push-action-1
@@ -168,12 +165,7 @@ jobs:
           echo "# Built image info" >> $GITHUB_STEP_SUMMARY
           echo "- image digest: \`${{ steps.build-and-push-action.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- revision (commit-sha): \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "${{github.ref_name}}" >> $GITHUB_STEP_SUMMARY
-          echo "${{github.ref}}" >> $GITHUB_STEP_SUMMARY
-          echo "${{github.head_ref}}" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## tags" >> $GITHUB_STEP_SUMMARY
-          echo "\`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- tags: \`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
 
     outputs:
       docker-image-published-digest: ${{ steps.build-and-push-action.outputs.digest }}
@@ -218,4 +210,4 @@ jobs:
           git add k8s/prod/kustomization.yaml k8s/prod/generated
           git commit -m "update: SG60/hello-rust@${{ github.sha }}"
           git push
-          echo Committed to infra: SG60/hello-rust-infrastructure-config@`git rev-parse HEAD`
+          echo Committed to infra: SG60/hello-rust-infrastructure-config@`git rev-parse HEAD` >> $GITHUB_STEP_SUMMARY
