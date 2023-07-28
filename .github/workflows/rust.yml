@@ -218,3 +218,4 @@ jobs:
           git add k8s/prod/kustomization.yaml k8s/prod/generated
           git commit -m "update: SG60/hello-rust@${{ github.sha }}"
           git push
+          echo Committed to infra: SG60/hello-rust-infrastructure-config@`git rev-parse HEAD`
