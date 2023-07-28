@@ -15,6 +15,7 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  DOCKER_CONTAINER_IMAGE_BASE: lhr.ocir.io/lrdyqp2xtoja/hello-rust-backend
 
 jobs:
   test:
@@ -107,16 +108,16 @@ jobs:
         uses: docker/metadata-action@v4
         with:
           images: |
-            lhr.ocir.io/lrdyqp2xtoja/hello-rust-backend
+            ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}
           tags: |
+            # Short git commit sha
+            type=sha
             type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             # An edge tag reflects the last commit of the active branch on your Git repository
             type=edge
-            # Short git commit sha
-            type=sha
             # set latest tag for default branch
             # type=raw,value=latest,enable={{is_default_branch}}
             # test version to try out with branch
@@ -195,7 +196,7 @@ jobs:
         # in 'prod' folder
         run: |
           cd k8s/prod
-          ${{ steps.kustomize-installation.outputs.KUSTOMIZE_COMMAND }} edit set image lhr.ocir.io/lrdyqp2xtoja/hello-rust-backend@${{ needs.build.outputs.docker-image-published-digest }}
+          ${{ steps.kustomize-installation.outputs.KUSTOMIZE_COMMAND }} edit set image ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}@${{ needs.build.outputs.docker-image-published-digest }}
 
       - name: Commit to git
         run: |
