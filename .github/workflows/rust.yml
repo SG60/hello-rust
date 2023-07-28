@@ -84,11 +84,16 @@ jobs:
           install: true
 
       - name: Build Docker image for cross
-        run: |
-          export BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.rust-target }}:latest
-          docker build -t cross-docker-image:tag -f ./CrossDockerfile \
-            --cache-from=type=gha --cache-to=type=gha --load \
-            --build-arg CROSS_BASE_IMAGE=$BASE_IMAGE .
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: CrossDockerfile
+          push: false
+          load: true
+          tags: cross-docker-image:tag
+          build-args: ghcr.io/cross-rs/${{ matrix.rust-target }}:latest
+          cache-from: type=gha
+          cache-to: type=gha
 
       - uses: rui314/setup-mold@v1
       - name: Build binary of project using cross
