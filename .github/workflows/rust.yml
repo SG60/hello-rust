@@ -67,8 +67,6 @@ jobs:
           cache-on-failure: "true"
       - run: cargo install cross
 
-      - run: echo 20
-
       - name: Set up Docker Context for Buildx
         id: buildx-context
         run: |
