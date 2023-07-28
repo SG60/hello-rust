@@ -113,6 +113,14 @@ jobs:
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
+            # An edge tag reflects the last commit of the active branch on your Git repository
+            type=edge
+            # Short git commit sha
+            type=sha
+            # set latest tag for default branch
+            # type=raw,value=latest,enable={{is_default_branch}}
+            # test version to try out with branch
+            # type=raw,value=latest,enable=${{ github.ref == format('refs/heads/{0}', 'better-docker-image-tagging') }}
 
       - name: Build Dockerfile
         id: build-and-push-action-1
@@ -122,8 +130,10 @@ jobs:
           file: Dockerfile
           push: false
           load: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          # doesn't need to have the correct final tag or labels here, this build just puts
+          # something in the local cache rather than pushing it. Correct tags and labels
+          # are set in the next docker/build-push-action
+          tags: latest
           cache-from: type=gha
           cache-to: type=local,dest=buildkit-docker-cache-location
           platforms: linux/arm64
@@ -151,8 +161,17 @@ jobs:
           cache-to: type=gha
           platforms: linux/arm64
 
+      - name: Job summary info (as markdown)
+        run: |
+          echo "# Built image info:" >> $GITHUB_STEP_SUMMARY
+          echo "- image digest: ${{ steps.build-and-push-action.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
+          echo "- image metadata: ${{ steps.build-and-push-action.outputs.metadata }}" >> $GITHUB_STEP_SUMMARY
+          echo "- revision (commit-sha): ${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "- default branch in repo: ${{ github.event.repository.default_branch }}" >> $GITHUB_STEP_SUMMARY
+
     outputs:
       docker-image-published-digest: ${{ steps.build-and-push-action.outputs.digest }}
+      docker-image-published-tag: ${{ steps.meta.outputs.tags }}
 
   deploy:
     runs-on: ubuntu-latest
