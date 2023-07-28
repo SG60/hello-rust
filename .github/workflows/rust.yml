@@ -87,6 +87,19 @@ jobs:
           cache-on-failure: "true"
       - run: cargo install cross
 
+      # - name: Set up Docker Context for Buildx
+      #   id: buildx-context
+      #   run: |
+      #     docker context create builders
+      # - name: Set up Docker Buildx
+      #   id: buildx
+      #   uses: docker/setup-buildx-action@v2
+      #   with:
+      #     version: v0.9.1
+      #     endpoint: builders
+
+      - run: docker build -t hello-rust/cross-docker:tag ./CrossDockerfile
+
       - uses: rui314/setup-mold@v1
       - name: Build
         run: |
@@ -95,17 +108,6 @@ jobs:
       - run: |
           ls -a ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib
         continue-on-error: true
-
-      - name: Set up Docker Context for Buildx
-        id: buildx-context
-        run: |
-          docker context create builders
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v2
-        with:
-          version: v0.9.1
-          endpoint: builders
 
       - name: Login to Docker Hub
         uses: docker/login-action@v2
