@@ -171,7 +171,7 @@ jobs:
 
     outputs:
       docker-image-published-digest: ${{ steps.build-and-push-action.outputs.digest }}
-      app-version: ${{github.sha}}
+      app-version: ${{ github.event.pull_request.head.sha || github.sha }}
 
   deploy:
     runs-on: ubuntu-latest
@@ -212,4 +212,4 @@ jobs:
           git add k8s/prod/kustomization.yaml k8s/prod/generated
           git commit -m "update: SG60/hello-rust@${{ github.sha }}"
           git push
-          echo Committed to infra: SG60/hello-rust-infrastructure-config@`git rev-parse HEAD` >> $GITHUB_STEP_SUMMARY
+          echo Committed to infra: https://github.com/SG60/hello-rust-infrastructure-config/commit/`git rev-parse HEAD` >> $GITHUB_STEP_SUMMARY
