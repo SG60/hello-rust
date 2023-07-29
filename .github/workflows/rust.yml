@@ -182,6 +182,6 @@ jobs:
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add k8s/prod/kustomization.yaml
+          git add k8s/prod/kustomization.yaml k8s/prod/generated
           git commit -m "update docker image digest"
           git push
