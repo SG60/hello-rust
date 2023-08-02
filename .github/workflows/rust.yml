@@ -80,18 +80,6 @@ jobs:
           endpoint: builders
           install: true
 
-      # - name: Build Docker image for cross
-      #   uses: docker/build-push-action@v3
-      #   with:
-      #     context: .
-      #     file: CrossDockerfile
-      #     push: false
-      #     load: true
-      #     tags: cross-docker-image:tag
-      #     build-args: CROSS_BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.rust-target }}:latest
-      #     cache-from: type=gha,scope=cross-docker-image
-      #     cache-to: type=gha,scope=cross-docker-image
-
       - uses: rui314/setup-mold@v1
 
       - name: Expose GitHub Runtime (for buildx gha caching outside of the docker actions)
