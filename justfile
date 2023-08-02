@@ -92,3 +92,8 @@ run-for-tokio-console $RUSTFLAGS="--cfg tokio_unstable" $NO_OTLP="1":
 
 tokio-console:
   tokio-console
+
+# Cross compile using nix
+cross-build nix-target="aarch64-multiplatform" cargo-target="aarch64-unknown-linux-gnu" profile="release":
+  nix develop '.#pkgsCross.{{nix-target}}.hello-rust' -c cargo build --target {{cargo-target}} --profile {{profile}}
+
