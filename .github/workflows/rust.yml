@@ -53,20 +53,28 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        rust-target: [aarch64-unknown-linux-gnu]
+        target:
+          - rust: aarch64-unknown-linux-gnu
+            nix: aarch64-multiplatform
     steps:
       - uses: actions/checkout@v3
 
-      # - uses: dtolnay/rust-toolchain@stable
-      #   with:
-      #     targets: ${{ matrix.rust-target }}
-      #     # 'rust-src' is downloaded by cross for some reason
-      #     components: rust-src
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target.rust }}
+
+      - uses: DeterminateSystems/nix-installer-action@main
+      - uses: DeterminateSystems/magic-nix-cache-action@main
 
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: "true"
-      - run: cargo install cross
+
+      # NOTE: Even faster might be to run all of these steps inside a docker container using https://hub.docker.com/r/nixos/nix
+      # Then maybe the initial flake install stuff could be cached
+      - name: build with cross compiler
+        run: |
+          nix develop '.#pkgsCross.${{ matrix.target.nix }}.hello-rust' -c cargo build --target ${{ matrix.target.rust }} --profile release
 
       - name: Set up Docker Context for Buildx
         id: buildx-context
@@ -80,22 +88,16 @@ jobs:
           endpoint: builders
           install: true
 
-      - name: Build Docker image for cross
-        uses: docker/build-push-action@v3
-        with:
-          context: .
-          file: CrossDockerfile
-          push: false
-          load: true
-          tags: cross-docker-image:tag
-          build-args: CROSS_BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.rust-target }}:latest
-          cache-from: type=gha,scope=cross-docker-image
-          cache-to: type=gha,scope=cross-docker-image
-
-      - uses: rui314/setup-mold@v1
-      - name: Build binary of project using cross
-        run: |
-          cross build --target=${{ matrix.rust-target }} --release
+      # - run: cargo install cross
+      # - uses: rui314/setup-mold@v1
+      #
+      # - name: Expose GitHub Runtime (for buildx gha caching outside of the docker actions)
+      #   uses: crazy-max/ghaction-github-runtime@v2.2.0
+      # - name: Build binary of project using cross
+      #   run: |
+      #     cross build --target=${{ matrix.target.rust }} --release
+      #   env:
+      #     CROSS_BUILD_OPTS: --cache-from type=gha,scope=cross-docker-image --cache-to type=gha,scope=cross-docker-image --load
 
       - name: Login to Docker Hub
         uses: docker/login-action@v2
