@@ -19,7 +19,6 @@ tokio-util = "0.7.8"
 serde = { version = "1.0.171", features = ["derive"] }
 serde_json = "1.0.89"
 serde_dynamo = { version = "4.0.9", features = ["aws-sdk-dynamodb+0_21"] }
-yup-oauth2 = "8.1.0"
 aws-config = "0.51.0"
 aws-sdk-dynamodb = "0.21.0"
 # https://github.com/1Password/typeshare
@@ -39,7 +38,6 @@ tracing = "0.1.37"
 # "rt-tokio-current-thread" required for batch exports of spans
 opentelemetry = { version = "0.18.0", features = ["rt-tokio-current-thread"] }
 opentelemetry-semantic-conventions = "0.10.0"
-opentelemetry-http = "0.7.0"
 # Integration between the tracing crate and the opentelemetry crate
 tracing-opentelemetry = "0.18.0"
 # Allows you to export data to OTEL collector
