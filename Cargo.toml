@@ -12,7 +12,7 @@ default-run = "hello-rust-backend"
 tokio-console = ["dep:console-subscriber"]
 
 [dependencies]
-reqwest = { version = "0.11", features = ["json", "native-tls"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 tokio = { version = "1", features = ["rt-multi-thread", "time", "signal"] }
 tokio-stream = "0.1.11"
 tokio-util = "0.7.8"
