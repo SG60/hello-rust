@@ -271,21 +271,18 @@ pub async fn do_some_stuff_with_etcd_and_init(
     etcd_endpoint: &str,
     node_name: &str,
     shutdown_receiver: tokio::sync::watch::Receiver<()>,
-) -> cluster_management::Result<InitAndEtcdTaskReturn> {
+) -> cluster_management::Result<tokio::task::JoinHandle<()>> {
     event!(Level::INFO, "Initialising etcd grpc clients");
     let etcd_clients =
         do_with_retries_infinite(|| EtcdClients::connect(etcd_endpoint.to_owned())).await;
 
     let result_of_tokio_task = tokio::spawn(manage_cluster_node_membership_and_start_work(
-        etcd_clients.clone(),
+        etcd_clients,
         node_name.to_owned(),
         shutdown_receiver,
     ));
 
-    Ok(InitAndEtcdTaskReturn {
-        etcd_clients,
-        result_of_tokio_task,
-    })
+    Ok(result_of_tokio_task)
 }
 
 /// Manage cluster membership recording

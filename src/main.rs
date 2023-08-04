@@ -91,7 +91,8 @@ async fn main() -> Result<()> {
         }
     });
 
-    let result_of_work_join_handle = result_of_work.map(|x| x.result_of_tokio_task);
+    let result_of_work_join_handle =
+        result_of_work.expect("Should have a join handle (check that etcd endpoint is set)");
 
     let mut sigterm_stream = signal(SignalKind::terminate())?;
     let mut sigint_stream = signal(SignalKind::interrupt())?;
@@ -99,7 +100,14 @@ async fn main() -> Result<()> {
         _ = sigterm_stream.recv() => {event!(Level::INFO, "sigterm received");}
         _ = sigint_stream.recv() => {event!(Level::INFO, "sigint received");}
         // also quit if the work task has completed
-        _ = async {result_of_work_join_handle.expect("crash here?!").await} => {event!(Level::INFO, "work finished");}
+        result = result_of_work_join_handle => {
+            match result {
+                Ok(_) => {event!(Level::INFO, "work finished");},
+                Err(error) => {
+                    event!(Level::ERROR, ?error, "Work task panicked");
+                }
+            }
+        }
     }
 
     let span = span!(Level::TRACE, "Shutting down tasks");
