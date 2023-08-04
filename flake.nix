@@ -64,8 +64,7 @@
       compile = pkgs.mkShell {
         inputsFrom = [ self.packages.${system}.default ];
       };
-      # default = with pkgs; mkShell { buildInputs = [ openssl ]; nativeBuildInputs = [ buildPackages.pkg-config buildPackages.gcc ]; };
-      default = pkgs.mkShell { nativeBuildInputs = with pkgs; [ protobuf ]; };
+      default = with pkgs; mkShell { buildInputs = [ openssl ]; nativeBuildInputs = [ protobuf ]; };
       k8s = pkgs.mkShell { buildInputs = with pkgs; [ skaffold ]; };
     };
 
