@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use anyhow::Result;
-use aws_sdk_dynamodb::{error::QueryError, model::AttributeValue, types::SdkError, Client};
+use aws_sdk_dynamodb::{model::AttributeValue, types::SdkError, Client};
 use serde::{Deserialize, Serialize};
 use serde_dynamo::{from_item, from_items};
 use thiserror::Error;
@@ -24,7 +24,7 @@ pub async fn load_client() -> Client {
 ///
 /// This function will return an error if the dynamo response fails.
 #[tracing::instrument]
-pub async fn get_users(client: &Client) -> Result<Vec<UserRecord>, DynamoClientError> {
+pub async fn get_users(client: &Client) -> Result<Vec<UserRecord>, DatabaseRequestError> {
     let paginator = client
         .query()
         .table_name("tasks")
@@ -47,7 +47,7 @@ pub async fn get_users(client: &Client) -> Result<Vec<UserRecord>, DynamoClientE
 pub async fn get_single_user(
     client: &Client,
     user_id: String,
-) -> Result<UserRecord, DynamoClientError> {
+) -> Result<UserRecord, DatabaseRequestError> {
     let item = client
         .get_item()
         .table_name("tasks")
@@ -92,7 +92,7 @@ pub struct UserRecordNotionData {
 pub async fn get_sync_record(
     client: &Client,
     user_id: &str,
-) -> Result<Vec<SyncRecord>, DynamoClientError> {
+) -> Result<Vec<SyncRecord>, DatabaseRequestError> {
     let paginator = client
         .query()
         .table_name("tasks")
@@ -111,7 +111,7 @@ pub async fn get_sync_record(
 }
 
 #[tracing::instrument]
-pub async fn get_sync_records(client: &Client) -> Result<Vec<SyncRecord>, DynamoClientError> {
+pub async fn get_sync_records(client: &Client) -> Result<Vec<SyncRecord>, DatabaseRequestError> {
     let paginator = client
         .query()
         .table_name("tasks")
@@ -134,7 +134,7 @@ pub async fn get_sync_records(client: &Client) -> Result<Vec<SyncRecord>, Dynamo
 async fn get_sync_records_for_one_partition(
     client: &Client,
     partition: u16,
-) -> Result<Vec<SyncRecord>, DynamoClientError> {
+) -> Result<Vec<SyncRecord>, DatabaseRequestError> {
     let partition_string = "sync#".to_string() + &partition.to_string();
 
     let paginator = client
@@ -162,7 +162,7 @@ pub async fn get_sync_records_for_partitions(
     client: Client,
     partitions: Vec<u16>,
     // ) -> Result<Vec<SyncRecord>, DynamoClientError> {
-) -> Result<Vec<SyncRecord>, DynamoClientError> {
+) -> Result<Vec<SyncRecord>, DatabaseRequestError> {
     let mut set = JoinSet::new();
 
     // TODO: there should possibly be some exponential retry logic with these, incase of rate
@@ -230,21 +230,32 @@ pub struct NotionDBPropertyOptions {
     pub notion_done_id: String,
 }
 
+/// General Error type for all requests to Dynamo DB, including serialization errors
 #[derive(Debug, Error)]
-pub enum DynamoClientError {
-    #[error("DynamoDB Query Error")]
-    DynamoQueryError {
-        #[from]
-        source: SdkError<QueryError>,
-    },
-    #[error("DynamoDB Get Item Error")]
-    DynamoGetItemError {
-        #[from]
-        source: SdkError<aws_sdk_dynamodb::error::GetItemError>,
-    },
+pub enum DatabaseRequestError {
+    #[error("Database error")]
+    DatabaseError(#[from] DynamoClientError),
     #[error("DynamoDB Serde Deserialization Error")]
     SerdeError {
         #[from]
         source: serde_dynamo::Error,
     },
+}
+
+/// Error deriving from the DynamoDB client
+#[derive(Debug, Error)]
+pub enum DynamoClientError {
+    #[error("{0:?}")]
+    QueryError(#[from] SdkError<aws_sdk_dynamodb::error::QueryError>),
+    #[error("{0:?}")]
+    GetItemError(#[from] SdkError<aws_sdk_dynamodb::error::GetItemError>),
+}
+
+impl<T> From<SdkError<T>> for DatabaseRequestError
+where
+    DynamoClientError: std::convert::From<aws_sdk_dynamodb::types::SdkError<T>>,
+{
+    fn from(value: SdkError<T>) -> Self {
+        Self::DatabaseError(value.into())
+    }
 }
