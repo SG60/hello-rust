@@ -1,4 +1,5 @@
 # Copy executable into our base image.
 FROM gcr.io/distroless/cc-debian11
-COPY target/aarch64-unknown-linux-gnu/release/hello-rust-backend /
+ARG RUST_TARGET_DIR=target/release
+COPY ${RUST_TARGET_DIR}/hello-rust-backend /
 CMD ["/hello-rust-backend"]

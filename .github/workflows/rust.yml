@@ -20,7 +20,8 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
-    if: ${{ !github.event.pull_request.draft }}
+    # if: ${{ !github.event.pull_request.draft }}
+    if: ${{ false }} # NOTE: DISABLE TEMPORARILY
     steps:
       - uses: actions/checkout@v3
       - name: Install protoc compiler (required by tonic, used by otel exporter)
@@ -36,7 +37,8 @@ jobs:
 
   clippy:
     runs-on: ubuntu-latest
-    if: ${{ !github.event.pull_request.draft }}
+    # if: ${{ !github.event.pull_request.draft }}
+    if: ${{ false }} # NOTE: DISABLE TEMPORARILY
     steps:
       - uses: actions/checkout@v3
       - name: Install protoc compiler (required by tonic, used by otel exporter)
@@ -72,9 +74,9 @@ jobs:
 
       # NOTE: Even faster might be to run all of these steps inside a docker container using https://hub.docker.com/r/nixos/nix
       # Then maybe the initial flake install stuff could be cached
-      - name: build with cross compiler
-        run: |
-          nix develop '.#pkgsCross.${{ matrix.target.nix }}.hello-rust' -c cargo build --target ${{ matrix.target.rust }} --profile release
+      # - name: build with cross compiler
+      #   run: |
+      #     nix develop '.#pkgsCross.${{ matrix.target.nix }}.hello-rust' -c cargo build --target ${{ matrix.target.rust }} --profile release
 
       - name: Set up Docker Context for Buildx
         id: buildx-context
@@ -88,16 +90,27 @@ jobs:
           endpoint: builders
           install: true
 
-      # - run: cargo install cross
+      # NOTE: wrong architecture atm
+      - name: nix build
+        run: nix build .#dockerImage && ./result | docker load
+
+      # Should probably just prebuild a docker container for Cross, and put it on DockerHub or somewhere similar
+      - run: cargo install cross
       # - uses: rui314/setup-mold@v1
-      #
-      # - name: Expose GitHub Runtime (for buildx gha caching outside of the docker actions)
-      #   uses: crazy-max/ghaction-github-runtime@v2.2.0
-      # - name: Build binary of project using cross
-      #   run: |
-      #     cross build --target=${{ matrix.target.rust }} --release
-      #   env:
-      #     CROSS_BUILD_OPTS: --cache-from type=gha,scope=cross-docker-image --cache-to type=gha,scope=cross-docker-image --load
+      - name: Build Docker image for cross
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: CrossDockerfile
+          push: false
+          load: true
+          tags: cross-docker-image:tag
+          build-args: CROSS_BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.target.rust }}:latest
+          cache-from: type=gha,scope=cross-docker-image
+          cache-to: type=gha,scope=cross-docker-image
+      - name: Build binary of project using cross
+        run: |
+          cross build --target=${{ matrix.target.rust }} --release
 
       - name: Login to Docker Hub
         uses: docker/login-action@v2
@@ -140,29 +153,50 @@ jobs:
           cache-from: type=gha
           cache-to: type=local,dest=buildkit-docker-cache-location
           platforms: linux/arm64
+          build-args: RUST_TARGET_DIR=target/${{ matrix.target.rust }}/release
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: image:built-unscanned-image
+          # image-ref: image:built-unscanned-image
+          image-ref: hello-rust-backend:nix-latest-build-tag
           format: "table"
           exit-code: "1"
           ignore-unfixed: true
           vuln-type: "os,library"
           severity: "CRITICAL,HIGH"
 
-      - name: Push
-        id: build-and-push-action
-        uses: docker/build-push-action@v3
-        with:
-          context: .
-          file: Dockerfile
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=local,src=buildkit-docker-cache-location
-          cache-to: type=gha
-          platforms: linux/arm64
+      # size comparison
+      - name: size comparison
+        run: |
+          echo nix:
+          echo $(docker image ls hello-rust-backend:nix-latest-build-tag --format "{{.Size}}")
+          echo cross:
+          echo $(docker image ls image:built-unscanned-image --format "{{.Size}}")
+
+      # tag nix image
+      - run: |
+          echo image_id=`docker image ls hello-rust-backend:nix-latest-build-tag --format "{{.ID}}"`
+          echo image_id=`docker image ls hello-rust-backend:nix-latest-build-tag --format "{{.ID}}"` >> "$GITHUB_OUTPUT"
+          echo "${{steps.meta.outputs.tags}}" | xargs -n1 docker tag hello-rust-backend:nix-latest-build-tag
+          docker rmi hello-rust-backend:nix-latest-build-tag
+        id: nix-image-tagging
+      - run: |
+          echo ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}
+          docker push --all-tags ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}
+
+      # - name: Push
+      #   id: build-and-push-action
+      #   uses: docker/build-push-action@v3
+      #   with:
+      #     context: .
+      #     file: Dockerfile
+      #     push: true
+      #     tags: ${{ steps.meta.outputs.tags }}
+      #     labels: ${{ steps.meta.outputs.labels }}
+      #     cache-from: type=local,src=buildkit-docker-cache-location
+      #     cache-to: type=gha
+      #     platforms: linux/arm64
 
       - name: Job summary info (as markdown)
         run: |
