@@ -63,8 +63,13 @@
     devShells = {
       compile = pkgs.mkShell {
         inputsFrom = [ self.packages.${system}.default ];
+        LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [ pkgs.openssl ];
       };
-      default = with pkgs; mkShell { buildInputs = [ openssl ]; nativeBuildInputs = [ protobuf ]; };
+      default = with pkgs; mkShell {
+        buildInputs = [ openssl ];
+        nativeBuildInputs = [ protobuf ];
+        LD_LIBRARY_PATH = lib.makeLibraryPath [ openssl ];
+      };
       k8s = pkgs.mkShell { buildInputs = with pkgs; [ skaffold ]; };
     };
 
