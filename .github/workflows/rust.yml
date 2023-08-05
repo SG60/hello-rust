@@ -69,8 +69,6 @@ jobs:
       - uses: DeterminateSystems/magic-nix-cache-action@main
 
       - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: "true"
 
       # NOTE: Even faster might be to run all of these steps inside a docker container using https://hub.docker.com/r/nixos/nix
       # Then maybe the initial flake install stuff could be cached
@@ -90,7 +88,7 @@ jobs:
           endpoint: builders
           install: true
 
-      # NOTE: wrong architecture atm
+      # TODO: wrong architecture atm, need to add a version for aarch64
       - name: nix build
         run: nix build .#dockerImage && ./result | docker load
 
