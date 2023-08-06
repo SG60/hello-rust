@@ -45,6 +45,8 @@
         # artifacts from above.
         hello-rust = craneLib.buildPackage (commonArgs // {
           inherit cargoArtifacts;
+          # Don't build any other binary artifacts!
+          cargoExtraArgs = "--bin=hello-rust-backend";
         });
         dockerImage = pkgs.dockerTools.streamLayeredImage {
           name = "hello-rust-backend";
@@ -74,10 +76,9 @@
             inputsFrom = [ self.packages.${system}.default ];
             LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.openssl ];
           };
+          # TODO: provide a version for cross compiling to aarch64-unknown-linux-gnu
           default = with pkgs; mkShell {
-            # buildInputs = [ openssl.dev ];
             nativeBuildInputs = [ buildPackages.protobuf ];
-            # LD_LIBRARY_PATH = lib.makeLibraryPath [ openssl ];
           };
           k8s = pkgs.mkShell { buildInputs = with pkgs; [ skaffold ]; };
         };
