@@ -95,17 +95,17 @@ jobs:
       # Should probably just prebuild a docker container for Cross, and put it on DockerHub or somewhere similar
       - run: cargo install cross
       # - uses: rui314/setup-mold@v1
-      # - name: Build Docker image for cross
-      #   uses: docker/build-push-action@v3
-      #   with:
-      #     context: .
-      #     file: CrossDockerfile
-      #     push: false
-      #     load: true
-      #     tags: lhr.ocir.io/lrdyqp2xtoja/hello-rust-backend-cross/${{ matrix.target.rust }}:latest
-      #     build-args: CROSS_BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.target.rust }}:latest
-      #     cache-from: type=gha,scope=cross-docker-image
-      #     cache-to: type=gha,scope=cross-docker-image
+      - name: Build Docker image for cross
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: CrossDockerfile
+          push: false
+          load: true
+          tags: cross-docker-image:tag
+          build-args: CROSS_BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.target.rust }}:latest
+          cache-from: type=gha,scope=cross-docker-image
+          cache-to: type=gha,scope=cross-docker-image
       - name: Build binary of project using cross
         run: |
           cross build --target=${{ matrix.target.rust }} --release
