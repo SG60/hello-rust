@@ -55,6 +55,8 @@
           };
         };
 
+
+
         # keep proto files
         protoFilter = path: _type: builtins.match ".*proto$" path != null;
         # combine with the default source filter
