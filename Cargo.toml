@@ -60,5 +60,5 @@ tonic-build = "0.8.4"
 # Cross (cross-compilation) Config
 [package.metadata.cross.target.aarch64-unknown-linux-gnu]
 # install protoc protobuf compiler in cross docker image
-image = "cross-docker-image:tag"
+image = "lhr.ocir.io/lrdyqp2xtoja/hello-rust-backend-cross/aarch64-unknown-linux-gnu:latest"
 # dockerfile = "./CrossDockerfile"
