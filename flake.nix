@@ -31,7 +31,7 @@
         # Common arguments can be set here to avoid repeating them later
         commonArgs = {
           inherit src;
-          nativeBuildInputs = [ pkgs.buildPackages.protobuf ];
+          nativeBuildInputs = [ pkgs.pkgsBuildHost.protobuf ];
           buildInputs = [
             # Add additional build inputs here
           ];
@@ -59,22 +59,24 @@
           };
         };
 
-        cross-targets-map = { "aarch64-multiplatform" = "aarch64-unknown-linux-gnu"; };
-        cross-targets = [ "aarch64-multiplatform" ];
+        cross-targets-to-rust = {
+          aarch64-linux = "aarch64-unknown-linux-gnu";
+          x86_64-linux = "x86_64-unknown-linux-gnu";
+        };
+        cross-target-systems = with flake-utils.lib.system; [ aarch64-linux x86_64-linux ];
         # TODO: Can this be merged with the normal compilation (do them all in one set of stuff, to avoid repeating myself?)
-        cross-results = builtins.map
-          (name:
+        cross-results = map
+          (targetSystem:
             let
-              rust-target = cross-targets-map.${name};
-              nix-cross-target = name;
-              nix-cross-pkgs = pkgs.pkgsCross.${nix-cross-target};
+              rust-target = cross-targets-to-rust.${targetSystem};
+              nix-cross-pkgs = import nixpkgs { localSystem = system; crossSystem = targetSystem; };
               toolchain = with fenix.packages.${system}; combine
                 [ stable.minimalToolchain targets.${rust-target}.stable.rust-std ];
               craneLib = crane.lib.${system}.overrideToolchain toolchain;
               cross-common-args = {
                 inherit src;
                 CARGO_BUILD_TARGET = rust-target;
-                nativeBuildInputs = [ pkgs.buildPackages.protobuf ];
+                nativeBuildInputs = [ pkgs.pkgsBuildHost.protobuf ];
               };
               cargoArtifacts = craneLib.buildDepsOnly cross-common-args;
               hello-rust = craneLib.buildPackage (cross-common-args // {
@@ -92,11 +94,15 @@
                 };
               };
             in
-            { name = name; dockerImage = dockerImage; hello-rust = hello-rust; })
-          cross-targets;
+            { inherit targetSystem dockerImage; bin = hello-rust; }
+          ) cross-target-systems;
 
-        cross-packages = builtins.listToAttrs (builtins.map (value: { name = "bin-${value.name}"; value = value.hello-rust; }) cross-results);
-        cross-docker = builtins.listToAttrs (builtins.map (value: { name = "docker-${value.name}"; value = value.dockerImage; }) cross-results);
+        # turn the results into a flat format that the nix packages output will accept
+        cross-packages = builtins.listToAttrs (lib.lists.concatMap
+          (x: [
+            { name = "docker/${x.targetSystem}"; value = x.dockerImage; }
+            { name = "bin/${x.targetSystem}"; value = x.bin; }
+          ]) cross-results);
 
         # keep proto files
         protoFilter = path: _type: builtins.match ".*proto$" path != null;
@@ -106,53 +112,16 @@
       in
       {
         packages = {
-          external-derivation = pkgs.callPackage ./derivation.nix { inherit pkgs self; };
           default = hello-rust;
           inherit dockerImage;
-        } // cross-packages // cross-docker;
+        }
+        // cross-packages;
         devShells = {
-          compile = pkgs.mkShell {
-            inputsFrom = [ self.packages.${system}.default ];
-            LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.openssl ];
-          };
-          # TODO: provide a version for cross compiling to aarch64-unknown-linux-gnu
           default = with pkgs; mkShell {
-            nativeBuildInputs = [ buildPackages.protobuf ];
+            nativeBuildInputs = [ pkgsBuildHost.protobuf ];
           };
           k8s = pkgs.mkShell { buildInputs = with pkgs; [ skaffold ]; };
         };
-
-        # packages = {
-        #   default = 
-        #     let
-        #       pkgs = nixpkgs.legacyPackages.${system};
-        #       inherit (pkgs) stdenv lib;
-        #     in
-        #     stdenv.mkDerivation {
-        #       inherit system;
-        #       buildInputs = with nixpkgs.legacyPackages.${system}; [ openssl ];
-        #       nativeBuildInputs = with nixpkgs.legacyPackages.${system}; [ buildPackages.pkg-config buildPackages.gcc ];
-        #       name = "hello rust backend";
-        #       src = ./.;
-        #       builder = "cargo build --target=aarch64-unknown-linux-gnu";
-        #     };
-        # };
-
-        # overlays.default
-
-        # The legacyPackages imported as overlay allows us to use pkgsCross to
-        # cross-compile those packages.
-        legacyPackages =
-          let
-            overlay = final: prev: {
-              hello-rust = prev.callPackage ./derivation.nix { };
-            };
-          in
-          import nixpkgs {
-            inherit system;
-            overlays = [ overlay ];
-            crossOverlays = [ overlay ];
-          };
 
         formatter = nixpkgs.legacyPackages.${system}.nixpkgs-fmt;
       });

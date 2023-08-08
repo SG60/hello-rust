@@ -70,12 +70,6 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
 
-      # NOTE: Even faster might be to run all of these steps inside a docker container using https://hub.docker.com/r/nixos/nix
-      # Then maybe the initial flake install stuff could be cached
-      # - name: build with cross compiler
-      #   run: |
-      #     nix develop '.#pkgsCross.${{ matrix.target.nix }}.hello-rust' -c cargo build --target ${{ matrix.target.rust }} --profile release
-
       - name: Set up Docker Context for Buildx
         id: buildx-context
         run: |
