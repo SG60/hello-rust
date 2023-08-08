@@ -7,8 +7,10 @@
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    crane.url = "github:ipetkov/crane";
-    crane.inputs.nixpkgs.follows = "nixpkgs";
+    crane = {
+      url = "github:ipetkov/crane";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = { self, nixpkgs, flake-utils, fenix, crane }:
@@ -57,7 +59,44 @@
           };
         };
 
+        cross-targets-map = { "aarch64-multiplatform" = "aarch64-unknown-linux-gnu"; };
+        cross-targets = [ "aarch64-multiplatform" ];
+        # TODO: Can this be merged with the normal compilation (do them all in one set of stuff, to avoid repeating myself?)
+        cross-results = builtins.map
+          (name:
+            let
+              rust-target = cross-targets-map.${name};
+              nix-cross-target = name;
+              nix-cross-pkgs = pkgs.pkgsCross.${nix-cross-target};
+              toolchain = with fenix.packages.${system}; combine
+                [ stable.minimalToolchain targets.${rust-target}.stable.rust-std ];
+              craneLib = crane.lib.${system}.overrideToolchain toolchain;
+              cross-common-args = {
+                inherit src;
+                CARGO_BUILD_TARGET = rust-target;
+                nativeBuildInputs = [ pkgs.buildPackages.protobuf ];
+              };
+              cargoArtifacts = craneLib.buildDepsOnly cross-common-args;
+              hello-rust = craneLib.buildPackage (cross-common-args // {
+                inherit cargoArtifacts;
+                # Don't build any other binary artifacts!
+                cargoExtraArgs = "--bin=hello-rust-backend";
+              });
+              # TODO: make this output the correct architecture
+              dockerImage = pkgs.dockerTools.streamLayeredImage {
+                name = "hello-rust-backend";
+                tag = "nix-latest-build-tag";
+                contents = [ hello-rust /* pkgs.cacert */ ];
+                config = {
+                  Cmd = [ "${hello-rust}/bin/hello-rust-backend" ];
+                };
+              };
+            in
+            { name = name; dockerImage = dockerImage; hello-rust = hello-rust; })
+          cross-targets;
 
+        cross-packages = builtins.listToAttrs (builtins.map (value: { name = "bin-${value.name}"; value = value.hello-rust; }) cross-results);
+        cross-docker = builtins.listToAttrs (builtins.map (value: { name = "docker-${value.name}"; value = value.dockerImage; }) cross-results);
 
         # keep proto files
         protoFilter = path: _type: builtins.match ".*proto$" path != null;
@@ -70,7 +109,7 @@
           external-derivation = pkgs.callPackage ./derivation.nix { inherit pkgs self; };
           default = hello-rust;
           inherit dockerImage;
-        };
+        } // cross-packages // cross-docker;
         devShells = {
           compile = pkgs.mkShell {
             inputsFrom = [ self.packages.${system}.default ];
