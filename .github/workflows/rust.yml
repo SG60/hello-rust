@@ -131,8 +131,8 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             # An edge tag reflects the last commit of the active branch on your Git repository
             type=edge
-            # Short git commit sha
-            type=sha
+            # git commit sha
+            type=sha,format=long
             # set latest tag for default branch
             type=raw,value=latest,enable={{is_default_branch}}
 
