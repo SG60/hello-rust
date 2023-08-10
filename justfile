@@ -11,10 +11,6 @@ j:
 run:
     cargo run
 
-# run the `fun` binary
-fun:
-    cargo run --bin fun
-
 # clippy
 lint:
     cargo clippy && cargo fmt --check --all
