@@ -82,7 +82,7 @@
               hello-rust = craneLib.buildPackage (cross-common-args // {
                 inherit cargoArtifacts;
                 # Don't build any other binary artifacts!
-                cargoExtraArgs = "--bin=hello-rust-backend";
+                # cargoExtraArgs = "--bin=hello-rust-backend";
               });
               # TODO: make this output the correct architecture
               dockerImage = pkgs.dockerTools.streamLayeredImage {
