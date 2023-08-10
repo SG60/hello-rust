@@ -68,16 +68,67 @@
         cross-results = map
           (targetSystem:
             let
+              dashesToUnderscores = builtins.replaceStrings [ "-" ] [ "_" ];
+              toUnderscoresAndCapitals = x: lib.strings.toUpper (dashesToUnderscores x);
+
+              qemu-command = "qemu-" + builtins.head (lib.strings.splitString "-" targetSystem);
               rust-target = cross-targets-to-rust.${targetSystem};
+              rustTargetForEnv = toUnderscoresAndCapitals rust-target;
+
               nix-cross-pkgs = import nixpkgs { localSystem = system; crossSystem = targetSystem; };
+
               toolchain = with fenix.packages.${system}; combine
                 [ stable.minimalToolchain targets.${rust-target}.stable.rust-std ];
               craneLib = crane.lib.${system}.overrideToolchain toolchain;
+
+              extra_env_when_cross_targets = lib.attrsets.optionalAttrs (targetSystem != system) {
+                "CARGO_TARGET_${rustTargetForEnv}_RUNNER" = qemu-command;
+              };
               cross-common-args = {
+                strictDeps = true;
+
+                # whether to run check phase (cargo test)
+                doCheck = false;
+
                 inherit src;
                 CARGO_BUILD_TARGET = rust-target;
-                nativeBuildInputs = [ pkgs.pkgsBuildHost.protobuf ];
-              };
+
+                # Tell cargo about the linker and an optional emulater. So they can be used in `cargo build`
+                # and `cargo run`.
+                # Environment variables are in format `CARGO_TARGET_<UPPERCASE_UNDERSCORE_RUST_TRIPLE>_LINKER`.
+                # They are also be set in `.cargo/config.toml` instead.
+                # See: https://doc.rust-lang.org/cargo/reference/config.html#target
+                "CARGO_TARGET_${rustTargetForEnv}_LINKER" = "${nix-cross-pkgs.stdenv.cc.targetPrefix}gcc";
+                # "CARGO_TARGET_${rustTargetForEnv}_RUNNER" = qemu-command;
+
+                # Dependencies which need to be build for the current platform
+                # on which we are doing the cross compilation. In this case,
+                # pkg-config needs to run on the build platform so that the build
+                # script can find the location of openssl. Note that we don't
+                # need to specify the rustToolchain here since it was already
+                # overridden above.
+                nativeBuildInputs = with nix-cross-pkgs; [ (with pkgsBuildHost; protobuf) stdenv.cc ];
+
+                # Build-time tools which are target agnostic. build = host = target = your-machine.
+                # Emulators should essentially also go `nativeBuildInputs`. But with some packaging issue,
+                # currently it would cause some rebuild.
+                # We put them here just for a workaround.
+                # See: https://github.com/NixOS/nixpkgs/pull/146583
+                depsBuildBuild = with nix-cross-pkgs; [ pkgsBuildBuild.qemu ];
+
+                # Dependencies which need to be built for the platform on which
+                # the binary will run. In this case, we need to compile openssl
+                # so that it can be linked with our executable.
+                # buildInputs = [];
+
+                # This environment variable may be necessary if any of your dependencies use a
+                # build-script which invokes the `cc` crate to build some other code. The `cc` crate
+                # should automatically pick up on our target-specific linker above, but this may be
+                # necessary if the build script needs to compile and run some extra code on the build
+                # system.
+                # HOST_CC = "${nix-cross-pkgs.stdenv.cc.nativePrefix}cc";
+                TARGET_CC = "${nix-cross-pkgs.stdenv.cc.targetPrefix}cc";
+              } // extra_env_when_cross_targets;
               cargoArtifacts = craneLib.buildDepsOnly cross-common-args;
               hello-rust = craneLib.buildPackage (cross-common-args // {
                 inherit cargoArtifacts;
@@ -94,15 +145,29 @@
                 };
               };
             in
-            { inherit targetSystem dockerImage; bin = hello-rust; }
-          ) cross-target-systems;
+            {
+              inherit targetSystem dockerImage; bin = hello-rust;
+              app = flake-utils.lib.mkApp {
+                drv = nix-cross-pkgs.writeScriptBin "hello-rust-backend" ''
+                  ${lib.strings.optionalString (system != targetSystem) "${pkgs.pkgsBuildBuild.qemu}/bin/${qemu-command} "}${hello-rust}/bin/hello-rust-backend
+                '';
+              };
+
+            }
+          )
+          cross-target-systems;
 
         # turn the results into a flat format that the nix packages output will accept
         cross-packages = builtins.listToAttrs (lib.lists.concatMap
           (x: [
             { name = "docker/${x.targetSystem}"; value = x.dockerImage; }
             { name = "bin/${x.targetSystem}"; value = x.bin; }
-          ]) cross-results);
+          ])
+          cross-results);
+
+        cross-apps = builtins.listToAttrs (lib.lists.concatMap
+          (cross-system-result: [{ name = cross-system-result.targetSystem; value = cross-system-result.app; }])
+          cross-results);
 
         # keep proto files
         protoFilter = path: _type: builtins.match ".*proto$" path != null;
@@ -122,6 +187,8 @@
           };
           k8s = pkgs.mkShell { buildInputs = with pkgs; [ skaffold ]; };
         };
+
+        apps = cross-apps;
 
         formatter = nixpkgs.legacyPackages.${system}.nixpkgs-fmt;
       });
