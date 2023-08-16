@@ -22,3 +22,6 @@ oauthtokencache.json
 *.tfstate.*
 
 .direnv
+
+# nix result directory
+/result

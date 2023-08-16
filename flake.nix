@@ -63,6 +63,7 @@
           aarch64-linux = "aarch64-unknown-linux-gnu";
           x86_64-linux = "x86_64-unknown-linux-gnu";
         };
+        nixTargetsToDockerArch = { aarch64-linux = "arm64"; x86_64-linux = "amd64"; };
         # cross-target-systems = with flake-utils.lib.system; [ aarch64-linux x86_64-linux ];
         crossTargetSystems = with flake-utils.lib.system; { "aarch64-linux" = { nixTarget = aarch64-linux; }; "x86_64-linux" = { nixTarget = x86_64-linux; }; };
         # TODO: Can this be merged with the normal compilation (do them all in one set of stuff, to avoid repeating myself?)
@@ -138,13 +139,13 @@
                 # Don't build any other binary artifacts!
                 # cargoExtraArgs = "--bin=hello-rust-backend";
               });
-              # TODO: make this output the correct architecture
               docker = pkgs.dockerTools.streamLayeredImage {
                 name = "hello-rust-backend";
                 tag = "nix-latest-build-tag";
+                architecture = nixTargetsToDockerArch.${targetSystem};
                 contents = [ hello-rust /* pkgs.cacert */ ];
                 config = {
-                  Cmd = [ "${hello-rust}/bin/hello-rust-backend" ];
+                  Entrypoint = [ "${hello-rust}/bin/hello-rust-backend" ];
                 };
               };
             in
