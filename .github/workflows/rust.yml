@@ -82,9 +82,10 @@ jobs:
           endpoint: builders
           install: true
 
-      # TODO: wrong architecture atm, need to add a version for aarch64
+      # TODO: Make this build across a matrix, and then merge the images into a docker manifest in another step
       - name: nix build
-        run: nix build .#dockerImage && ./result | docker load
+        run: nix build -L .#docker/aarch64-linux && ./result | docker load
+          # nix build -L .#docker/x86_64-linux && ./result | docker load
 
       # Should probably just prebuild a docker container for Cross, and put it on DockerHub or somewhere similar
       - run: cargo install cross
