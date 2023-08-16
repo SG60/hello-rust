@@ -59,21 +59,24 @@
           };
         };
 
-        cross-targets-to-rust = {
+        nixTargetsToRust = {
           aarch64-linux = "aarch64-unknown-linux-gnu";
           x86_64-linux = "x86_64-unknown-linux-gnu";
         };
-        cross-target-systems = with flake-utils.lib.system; [ aarch64-linux x86_64-linux ];
+        # cross-target-systems = with flake-utils.lib.system; [ aarch64-linux x86_64-linux ];
+        crossTargetSystems = with flake-utils.lib.system; { "aarch64-linux" = { nixTarget = aarch64-linux; }; "x86_64-linux" = { nixTarget = x86_64-linux; }; };
         # TODO: Can this be merged with the normal compilation (do them all in one set of stuff, to avoid repeating myself?)
-        cross-results = map
-          (targetSystem:
+        cross-results = builtins.mapAttrs
+          (name: targetAttrsValue:
             let
+              targetSystem = targetAttrsValue.nixTarget;
+
               dashesToUnderscores = builtins.replaceStrings [ "-" ] [ "_" ];
               toUnderscoresAndCapitals = x: lib.strings.toUpper (dashesToUnderscores x);
 
               qemu-command = "qemu-" + builtins.head (lib.strings.splitString "-" targetSystem);
-              rust-target = cross-targets-to-rust.${targetSystem};
-              rustTargetForEnv = toUnderscoresAndCapitals rust-target;
+              rust-target = nixTargetsToRust.${targetSystem};
+              rustTargetForEnvVars = toUnderscoresAndCapitals rust-target;
 
               nix-cross-pkgs = import nixpkgs { localSystem = system; crossSystem = targetSystem; };
 
@@ -82,7 +85,7 @@
               craneLib = crane.lib.${system}.overrideToolchain toolchain;
 
               extra_env_when_cross_targets = lib.attrsets.optionalAttrs (targetSystem != system) {
-                "CARGO_TARGET_${rustTargetForEnv}_RUNNER" = qemu-command;
+                "CARGO_TARGET_${rustTargetForEnvVars}_RUNNER" = qemu-command;
               };
               cross-common-args = {
                 strictDeps = true;
@@ -98,7 +101,7 @@
                 # Environment variables are in format `CARGO_TARGET_<UPPERCASE_UNDERSCORE_RUST_TRIPLE>_LINKER`.
                 # They are also be set in `.cargo/config.toml` instead.
                 # See: https://doc.rust-lang.org/cargo/reference/config.html#target
-                "CARGO_TARGET_${rustTargetForEnv}_LINKER" = "${nix-cross-pkgs.stdenv.cc.targetPrefix}gcc";
+                "CARGO_TARGET_${rustTargetForEnvVars}_LINKER" = "${nix-cross-pkgs.stdenv.cc.targetPrefix}gcc";
                 # "CARGO_TARGET_${rustTargetForEnv}_RUNNER" = qemu-command;
 
                 # Dependencies which need to be build for the current platform
@@ -114,7 +117,7 @@
                 # currently it would cause some rebuild.
                 # We put them here just for a workaround.
                 # See: https://github.com/NixOS/nixpkgs/pull/146583
-                depsBuildBuild = with nix-cross-pkgs; [ pkgsBuildBuild.qemu ];
+                depsBuildBuild = with nix-cross-pkgs; if targetSystem != system then [ pkgsBuildBuild.qemu ] else [ ];
 
                 # Dependencies which need to be built for the platform on which
                 # the binary will run. In this case, we need to compile openssl
@@ -136,7 +139,7 @@
                 # cargoExtraArgs = "--bin=hello-rust-backend";
               });
               # TODO: make this output the correct architecture
-              dockerImage = pkgs.dockerTools.streamLayeredImage {
+              docker = pkgs.dockerTools.streamLayeredImage {
                 name = "hello-rust-backend";
                 tag = "nix-latest-build-tag";
                 contents = [ hello-rust /* pkgs.cacert */ ];
@@ -145,29 +148,26 @@
                 };
               };
             in
-            {
-              inherit targetSystem dockerImage; bin = hello-rust;
-              app = flake-utils.lib.mkApp {
-                drv = nix-cross-pkgs.writeScriptBin "hello-rust-backend" ''
-                  ${lib.strings.optionalString (system != targetSystem) "${pkgs.pkgsBuildBuild.qemu}/bin/${qemu-command} "}${hello-rust}/bin/hello-rust-backend
-                '';
-              };
+            lib.attrsets.recurseIntoAttrs
+              {
+                inherit targetSystem docker;
+                bin = hello-rust;
+                app = flake-utils.lib.mkApp {
+                  drv = nix-cross-pkgs.writeScriptBin "hello-rust-backend" ''
+                    ${lib.strings.optionalString (system != targetSystem) "${pkgs.pkgsBuildBuild.qemu}/bin/${qemu-command} "}${hello-rust}/bin/hello-rust-backend
+                  '';
+                };
 
-            }
+              }
           )
-          cross-target-systems;
+          crossTargetSystems;
 
-        # turn the results into a flat format that the nix packages output will accept
-        cross-packages = builtins.listToAttrs (lib.lists.concatMap
-          (x: [
-            { name = "docker/${x.targetSystem}"; value = x.dockerImage; }
-            { name = "bin/${x.targetSystem}"; value = x.bin; }
-          ])
-          cross-results);
+        flattenOneLevel = with lib.attrsets; concatMapAttrs (name: value: mapAttrs' (name2: value2: nameValuePair ("${name2}/${name}") value2) value);
+        filterFlattenedByPrefixes = with lib.attrsets // lib.strings;  prefixes: attrset: filterAttrs (name: v: builtins.foldl' (a: b: a || hasPrefix b name) false prefixes) attrset;
 
-        cross-apps = builtins.listToAttrs (lib.lists.concatMap
-          (cross-system-result: [{ name = cross-system-result.targetSystem; value = cross-system-result.app; }])
-          cross-results);
+        cross-flattened = flattenOneLevel cross-results;
+        crossPackages = filterFlattenedByPrefixes [ "docker/" "bin/" ] cross-flattened;
+        crossApps = filterFlattenedByPrefixes [ "app/" ] cross-flattened;
 
         # keep proto files
         protoFilter = path: _type: builtins.match ".*proto$" path != null;
@@ -180,7 +180,7 @@
           default = hello-rust;
           inherit dockerImage;
         }
-        // cross-packages;
+        // crossPackages;
         devShells = {
           default = with pkgs; mkShell {
             nativeBuildInputs = [ pkgsBuildHost.protobuf ];
@@ -188,7 +188,7 @@
           k8s = pkgs.mkShell { buildInputs = with pkgs; [ skaffold ]; };
         };
 
-        apps = cross-apps;
+        apps = crossApps;
 
         formatter = nixpkgs.legacyPackages.${system}.nixpkgs-fmt;
       });
