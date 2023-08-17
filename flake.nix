@@ -143,7 +143,7 @@
                 name = "hello-rust-backend";
                 tag = "nix-latest-build-tag";
                 architecture = nixTargetsToDockerArch.${targetSystem};
-                contents = [ hello-rust /* pkgs.cacert */ ];
+                contents = [ hello-rust pkgs.cacert ];
                 config = {
                   Entrypoint = [ "${hello-rust}/bin/hello-rust-backend" ];
                 };
