@@ -1,11 +1,11 @@
 use std::{collections::HashMap, future::Future, time::Duration};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use aws::get_users;
 use serde::{Deserialize, Serialize};
 use tokio_util::sync::CancellationToken;
 use tracing::{
-    debug, debug_span, error, event, info_span, instrument, trace, warn, Instrument, Level,
+    debug, debug_span, error, event, info_span, instrument, span, trace, Instrument, Level,
 };
 
 use crate::{
@@ -24,6 +24,108 @@ pub mod settings;
 mod source_gcal;
 mod source_notion;
 pub mod tracing_utils;
+
+pub async fn run(mut shutdown_rx: tokio::sync::watch::Receiver<()>) -> anyhow::Result<()> {
+    let init_stuff_that_can_be_shutdown_immediately = async move {
+        tracing_utils::set_up_logging()?;
+
+        // Env vars! -----------------------------------
+        let settings_map = do_with_retries_sync(
+            settings::get_settings,
+            RetryConfig {
+                maximum_backoff: Duration::from_secs(300),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+        event!(Level::INFO, "Settings successfully obtained.");
+        event!(Level::INFO, "{:#?}", settings_map);
+
+        dbg!(std::env::var("NO_OTLP")
+            .unwrap_or_else(|_| "0".to_owned())
+            .as_str());
+
+        anyhow::Ok::<_>(settings_map)
+    };
+
+    let settings_map = tokio::select! {
+        result = init_stuff_that_can_be_shutdown_immediately => {
+            Some(result.unwrap())
+        },
+        s = shutdown_rx.changed() => {
+            s.expect("receiver should work");
+            event!(Level::INFO, "rx shutdown channel changed");
+            None
+        }
+    };
+
+    if let Some(settings_map) = settings_map {
+        let span = span!(Level::TRACE, "talk to etcd");
+
+        let node_name = settings_map.node_name;
+
+        let result_of_work = async {
+            // This is correct! If we yield here, the span will be exited,
+            // and re-entered when we resume.
+            if settings_map.etcd_url.is_some() {
+                event!(Level::INFO, "About to try talking to etcd!");
+
+                event!(Level::INFO, "Clustered setting: {}", settings_map.clustered);
+
+                let shutdown_receiver = shutdown_rx.clone();
+
+                let result = do_some_stuff_with_etcd_and_init(
+                    &settings_map.etcd_url.expect("should be valid string"),
+                    node_name.as_str(),
+                    shutdown_receiver,
+                )
+                .await;
+
+                match result {
+                    Ok(ref result) => {
+                        event!(Level::INFO, "{:#?}", result);
+                    }
+                    Err(ref error) => {
+                        event!(Level::ERROR, "Error while talking to etcd. {:#?}", error)
+                    }
+                }
+                result.ok()
+            } else {
+                event!(Level::WARN, "No etcd endpoint set.");
+                None
+            }
+        }
+        // instrument the async block with the span...
+        .instrument(span)
+        // ...and await it.
+        .await;
+
+        let mut rx2 = shutdown_rx.clone();
+        tokio::spawn(async move {
+            tokio::select! {
+                _ = async move {
+                    loop {
+                        event!(Level::INFO, "a loop");
+                        tokio::time::sleep(Duration::from_secs(10)).await;
+                    }
+                }
+                    .instrument(span!(Level::TRACE, "loop span")) => {},
+                _ = rx2.changed() => {
+                    event!(Level::INFO, "rx shutdown channel changed");
+                }
+            }
+        });
+
+        let result_of_work_join_handle =
+            result_of_work.expect("Should have a join handle (check that etcd endpoint is set)");
+
+        result_of_work_join_handle.await?;
+    }
+
+    Ok(())
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct GoogleResponse {
@@ -258,6 +360,43 @@ where
         }
     }
 }
+#[instrument(err(Debug), skip(f), level = "trace")]
+async fn do_with_retries_sync<A, E, F: Fn() -> Result<A, E>>(
+    f: F,
+    config: RetryConfig,
+) -> Result<A, E>
+where
+    E: std::error::Error,
+{
+    let mut n_tries = 0;
+    let mut retry_wait_duration = config.initial_duration;
+
+    loop {
+        let result = f();
+
+        match result {
+            Err(error) => {
+                n_tries += 1;
+
+                trace!(n_tries, "{}", error);
+
+                if let Some(max) = config.maximum_n_tries {
+                    if n_tries == max {
+                        break Err(error);
+                    };
+                }
+
+                tokio::time::sleep(retry_wait_duration).await;
+                if retry_wait_duration < config.maximum_backoff {
+                    retry_wait_duration *= 2;
+                };
+            }
+            Ok(result) => {
+                break Ok(result);
+            }
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct InitAndEtcdTaskReturn {
@@ -270,11 +409,15 @@ pub struct InitAndEtcdTaskReturn {
 pub async fn do_some_stuff_with_etcd_and_init(
     etcd_endpoint: &str,
     node_name: &str,
-    shutdown_receiver: tokio::sync::watch::Receiver<()>,
-) -> cluster_management::Result<tokio::task::JoinHandle<()>> {
+    mut shutdown_receiver: tokio::sync::watch::Receiver<()>,
+) -> anyhow::Result<tokio::task::JoinHandle<()>> {
     event!(Level::INFO, "Initialising etcd grpc clients");
-    let etcd_clients =
-        do_with_retries_infinite(|| EtcdClients::connect(etcd_endpoint.to_owned())).await;
+    let etcd_clients = tokio::select! {
+        x = do_with_retries_infinite(|| EtcdClients::connect(etcd_endpoint.to_owned())) => {Some(x)},
+        _ = shutdown_receiver.changed() => {None}
+    };
+
+    let etcd_clients = etcd_clients.ok_or(anyhow!("Shutdown, so no etcd clients available"))?;
 
     let result_of_tokio_task = tokio::spawn(manage_cluster_node_membership_and_start_work(
         etcd_clients,
