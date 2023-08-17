@@ -148,6 +148,10 @@
                   Entrypoint = [ "${hello-rust}/bin/hello-rust-backend" ];
                 };
               };
+
+              cross-common-args-with-toolchain = cross-common-args //
+                { nativeBuildInputs = cross-common-args.nativeBuildInputs ++ [ toolchain ]; };
+
             in
             lib.attrsets.recurseIntoAttrs
               {
@@ -158,7 +162,7 @@
                     ${lib.strings.optionalString (system != targetSystem) "${pkgs.pkgsBuildBuild.qemu}/bin/${qemu-command} "}${hello-rust}/bin/hello-rust-backend
                   '';
                 };
-
+                buildShell = nix-cross-pkgs.mkShell cross-common-args-with-toolchain;
               }
           )
           crossTargetSystems;
@@ -169,6 +173,7 @@
         cross-flattened = flattenOneLevel cross-results;
         crossPackages = filterFlattenedByPrefixes [ "docker/" "bin/" ] cross-flattened;
         crossApps = filterFlattenedByPrefixes [ "app/" ] cross-flattened;
+        crossBuildShells = filterFlattenedByPrefixes [ "buildShell/" ] cross-flattened;
 
         # keep proto files
         protoFilter = path: _type: builtins.match ".*proto$" path != null;
@@ -187,7 +192,7 @@
             nativeBuildInputs = [ pkgsBuildHost.protobuf ];
           };
           k8s = pkgs.mkShell { buildInputs = with pkgs; [ skaffold ]; };
-        };
+        } // crossBuildShells;
 
         apps = crossApps;
 

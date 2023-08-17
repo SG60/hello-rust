@@ -66,10 +66,10 @@ jobs:
           targets: ${{ matrix.target.rust }}
 
       - uses: DeterminateSystems/nix-installer-action@main
-      - uses: DeterminateSystems/magic-nix-cache-action@main
       - uses: cachix/cachix-action@v12
         with:
           name: nix-community
+      - uses: DeterminateSystems/magic-nix-cache-action@main
 
       - uses: Swatinem/rust-cache@v2
 
