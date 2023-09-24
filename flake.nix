@@ -111,7 +111,7 @@
                 # script can find the location of openssl. Note that we don't
                 # need to specify the rustToolchain here since it was already
                 # overridden above.
-                nativeBuildInputs = with nix-cross-pkgs; [ (with pkgsBuildHost; protobuf) stdenv.cc ];
+                nativeBuildInputs = with nix-cross-pkgs; (with pkgsBuildHost; [ protobuf ]) ++ [ stdenv.cc ];
 
                 # Build-time tools which are target agnostic. build = host = target = your-machine.
                 # Emulators should essentially also go `nativeBuildInputs`. But with some packaging issue,
@@ -138,6 +138,14 @@
                 inherit cargoArtifacts;
                 # Don't build any other binary artifacts!
                 # cargoExtraArgs = "--bin=hello-rust-backend";
+
+                # useful site: https://jade.fyi/blog/optimizing-nix-docker/
+                postInstall = with nix-cross-pkgs; ''
+                  ${removeReferencesTo}/bin/remove-references-to -t ${stdenv.cc.cc} $out/bin/hello-rust-backend
+                '';
+                # This attribute is similar to disallowedReferences, but it specifies illegal requisites for
+                # the whole closure, so all the dependencies recursively.
+                disallowedRequisites = with nix-cross-pkgs; [ stdenv.cc.cc ];
               });
               docker = pkgs.dockerTools.streamLayeredImage {
                 name = "hello-rust-backend";
