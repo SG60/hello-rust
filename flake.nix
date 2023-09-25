@@ -143,9 +143,9 @@
                     ${lib.strings.optionalString (system != targetSystem) "${pkgs.pkgsBuildBuild.qemu}/bin/${qemu-command} "}${hello-rust}/bin/hello-rust-backend
                   '';
                 };
-                # buildShell = nix-cross-pkgs.mkShell cross-common-args-with-toolchain;
+
                 buildShell = craneLib.devShell {
-                  packages = cross-common-args.nativeBuildInputs;
+                  packages = [ fenix.packages.${system}.stable.clippy ] ++ cross-common-args.nativeBuildInputs;
                 };
 
                 # Run clippy (and deny all warnings) on the crate source,
@@ -160,6 +160,9 @@
                   inherit cargoArtifacts;
                 });
 
+                hello-rust-test = craneLib.cargoTest (cross-common-args // {
+                  inherit cargoArtifacts;
+                });
               }
           )
           crossTargetSystems;
@@ -171,6 +174,9 @@
         crossPackages = filterFlattenedByPrefixes [ "docker/" "bin/" ] cross-flattened;
         crossApps = filterFlattenedByPrefixes [ "app/" ] cross-flattened;
         crossBuildShells = filterFlattenedByPrefixes [ "buildShell/" ] cross-flattened;
+
+        hello-rust-clippy = cross-flattened."hello-rust-clippy/${system}";
+        hello-rust-test = cross-flattened."hello-rust-test/${system}";
 
         # keep proto files
         protoFilter = path: _type: builtins.match ".*proto$" path != null;
@@ -188,6 +194,10 @@
         } // crossBuildShells;
 
         apps = crossApps;
+
+        checks = {
+          inherit hello-rust-clippy hello-rust-test;
+        };
 
         formatter = nixpkgs.legacyPackages.${system}.nixpkgs-fmt;
       });

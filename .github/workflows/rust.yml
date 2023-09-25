@@ -21,34 +21,24 @@ jobs:
   test:
     runs-on: ubuntu-latest
     # if: ${{ !github.event.pull_request.draft }}
-    if: ${{ false }} # NOTE: DISABLE TEMPORARILY
     steps:
       - uses: actions/checkout@v3
-      - name: Install protoc compiler (required by tonic, used by otel exporter)
-        run: |
-          sudo apt-get update
-          sudo apt install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: "true"
       - uses: rui314/setup-mold@v1
       - name: Run tests
-        run: cargo test
+        run: nix develop .#buildShell/x86_64-linux -c cargo test
 
   clippy:
     runs-on: ubuntu-latest
     # if: ${{ !github.event.pull_request.draft }}
-    if: ${{ false }} # NOTE: DISABLE TEMPORARILY
     steps:
       - uses: actions/checkout@v3
-      - name: Install protoc compiler (required by tonic, used by otel exporter)
-        run: |
-          sudo apt-get update
-          sudo apt install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: "true"
-      - run: cargo clippy
+      - run: nix develop .#buildShell/x86_64-linux -c cargo clippy
 
   build:
     # runs-on: [self-hosted, linux, ARM64]
