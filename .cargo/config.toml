@@ -1,3 +1,7 @@
 [target.aarch64-unknown-linux-gnu]
-linker = "aarch64-unknown-linux-gnu-gcc"
+# linker = "aarch64-unknown-linux-gnu-gcc"
+# rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+# [target.'cfg(all())']
+# linker = "clang"
 # rustflags = ["-C", "link-arg=-fuse-ld=mold"]
