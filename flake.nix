@@ -18,7 +18,6 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        # crossPkgs = import nixpkgs { localSystem = system; crossSystem = targetSystem; };
         craneLib = crane.lib.${system}.overrideToolchain
           fenix.packages.${system}.stable.minimalToolchain;
 
@@ -27,37 +26,6 @@
           filter = combinedCraneSourceFilter;
         };
         inherit (pkgs) lib;
-
-        # Common arguments can be set here to avoid repeating them later
-        commonArgs = {
-          inherit src;
-          nativeBuildInputs = [ pkgs.pkgsBuildHost.protobuf ];
-          buildInputs = [
-            # Add additional build inputs here
-          ];
-          # Additional environment variables can be set directly
-          # MY_CUSTOM_VAR = "some value";
-        };
-
-        # Build *just* the cargo dependencies, so we can reuse
-        # all of that work (e.g. via cachix) when running in CI
-        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-
-        # Build the actual crate itself, reusing the dependency
-        # artifacts from above.
-        hello-rust = craneLib.buildPackage (commonArgs // {
-          inherit cargoArtifacts;
-          # Don't build any other binary artifacts!
-          cargoExtraArgs = "--bin=hello-rust-backend";
-        });
-        dockerImage = pkgs.dockerTools.streamLayeredImage {
-          name = "hello-rust-backend";
-          tag = "nix-latest-build-tag";
-          contents = [ hello-rust /* pkgs.cacert */ ];
-          config = {
-            Cmd = [ "${hello-rust}/bin/hello-rust-backend" ];
-          };
-        };
 
         nixTargetsToRust = {
           aarch64-linux = "aarch64-unknown-linux-gnu";
@@ -88,6 +56,7 @@
               extra_env_when_cross_targets = lib.attrsets.optionalAttrs (targetSystem != system) {
                 "CARGO_TARGET_${rustTargetForEnvVars}_RUNNER" = qemu-command;
               };
+              # Common arguments can be set here to avoid repeating them later
               cross-common-args = {
                 strictDeps = true;
 
@@ -133,7 +102,12 @@
                 # HOST_CC = "${nix-cross-pkgs.stdenv.cc.nativePrefix}cc";
                 TARGET_CC = "${nix-cross-pkgs.stdenv.cc.targetPrefix}cc";
               } // extra_env_when_cross_targets;
+
+              # Build *just* the cargo dependencies, so we can reuse
+              # all of that work (e.g. via cachix) when running in CI
               cargoArtifacts = craneLib.buildDepsOnly cross-common-args;
+              # Build the actual crate itself, reusing the dependency
+              # artifacts from above.
               hello-rust = craneLib.buildPackage (cross-common-args // {
                 inherit cargoArtifacts;
                 # Don't build any other binary artifacts!
@@ -157,8 +131,7 @@
                 };
               };
 
-              cross-common-args-with-toolchain = cross-common-args //
-                { nativeBuildInputs = cross-common-args.nativeBuildInputs ++ [ toolchain ]; };
+
 
             in
             lib.attrsets.recurseIntoAttrs
@@ -170,7 +143,23 @@
                     ${lib.strings.optionalString (system != targetSystem) "${pkgs.pkgsBuildBuild.qemu}/bin/${qemu-command} "}${hello-rust}/bin/hello-rust-backend
                   '';
                 };
-                buildShell = nix-cross-pkgs.mkShell cross-common-args-with-toolchain;
+                # buildShell = nix-cross-pkgs.mkShell cross-common-args-with-toolchain;
+                buildShell = craneLib.devShell {
+                  packages = cross-common-args.nativeBuildInputs;
+                };
+
+                # Run clippy (and deny all warnings) on the crate source,
+                # reusing the dependency artifacts (e.g. from build scripts or
+                # proc-macros) from above.
+                #
+                # Note that this is done as a separate derivation so it
+                # does not impact building just the crate by itself.
+                hello-rust-clippy = craneLib.cargoClippy (cross-common-args // {
+                  # Again we apply some extra arguments only to this derivation
+                  # and not every where else. In this case we add some clippy flags
+                  inherit cargoArtifacts;
+                });
+
               }
           )
           crossTargetSystems;
@@ -190,11 +179,7 @@
           (protoFilter path type) || (craneLib.filterCargoSources path type);
       in
       {
-        packages = {
-          default = hello-rust;
-          inherit dockerImage;
-        }
-        // crossPackages;
+        packages = { default = crossPackages."bin/${system}"; } // crossPackages;
         devShells = {
           default = with pkgs; mkShell {
             nativeBuildInputs = [ pkgsBuildHost.protobuf ];
