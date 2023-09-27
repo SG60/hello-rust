@@ -57,6 +57,14 @@ jobs:
   build:
     # runs-on: [self-hosted, linux, ARM64]
     runs-on: ubuntu-latest
+    services:
+      # Run a local docker registry
+      # This is needed for pushing the multiarch base image to,
+      # because buildkit can't access a loaded image for another architecture
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
     strategy:
       matrix:
         target:
@@ -112,7 +120,10 @@ jobs:
       #     cross build --target=${{ matrix.target.rust }} --release
 
       - name: nix build base docker image
-        run: nix build -L .#dockerDependenciesOnly/${{ matrix.target.nix }} && ./result | docker load
+        run: |
+          nix build -L .#dockerDependenciesOnly/${{ matrix.target.nix }} && ./result | docker load
+          docker tag hello-rust-backend-dependencies:nix-latest-build-tag localhost:5000/hello-rust-backend-dependencies:nix-latest-build-tag
+          docker push localhost:5000/hello-rust-backend-dependencies:nix-latest-build-tag
       - name: Build binary of project using nix shell
         run: |
           nix develop .#buildShell/${{ matrix.target.nix }} -c cargo build --target=${{ matrix.target.rust }} --release
@@ -161,7 +172,7 @@ jobs:
           # BASE_IMAGE referring to the nix built base docker image
           build-args: |
             RUST_TARGET_DIR=target/${{ matrix.target.rust }}/release
-            BASE_IMAGE=hello-rust-backend-dependencies:nix-latest-build-tag
+            BASE_IMAGE=localhost:5000/hello-rust-backend-dependencies:nix-latest-build-tag
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
