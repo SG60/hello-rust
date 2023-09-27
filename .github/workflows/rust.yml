@@ -208,7 +208,6 @@ jobs:
       - run: |
           # export IMAGE_TO_RETAG_AND_PUSH="hello-rust-backend:nix-latest-build-tag"
           export IMAGE_TO_RETAG_AND_PUSH="docker-built-image:latest-image"
-          echo image_digest="${{steps.build-and-push-action-1.outputs.digest}}" >> "$GITHUB_OUTPUT"
           echo image_id=`docker image ls $IMAGE_TO_RETAG_AND_PUSH --format "{{.ID}}"`
           echo image_id=`docker image ls $IMAGE_TO_RETAG_AND_PUSH --format "{{.ID}}"` >> "$GITHUB_OUTPUT"
           echo final_image_size=$(docker image ls $IMAGE_TO_RETAG_AND_PUSH --format "{{.Size}}") >> "$GITHUB_OUTPUT"
@@ -218,6 +217,10 @@ jobs:
       - run: |
           echo ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}
           docker push --all-tags ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}
+          echo image_digest=$(docker manifest inspect \
+            ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}:sha-${{ github.event.pull_request.head.sha || github.sha }} -v |
+            jq ".Descriptor.digest")
+        id: docker-push
 
       # - name: Push
       #   id: build-and-push-action
@@ -235,13 +238,13 @@ jobs:
       - name: Job summary info (as markdown)
         run: |
           echo "# Built image info" >> $GITHUB_STEP_SUMMARY
-          echo "- image digest: \`${{ steps.nix-image-tagging.outputs.image_digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- image digest: \`${{ steps.docker-push.outputs.image_digest }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- revision (commit-sha): \`${{ github.event.pull_request.head.sha || github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- tags: \`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- image size: \`${{ steps.nix-image-tagging.outputs.final_image_size }}\`" >> $GITHUB_STEP_SUMMARY
 
     outputs:
-      docker-image-published-digest: ${{ steps.build-and-push-action.outputs.digest }}
+      docker-image-published-digest: ${{ steps.docker-push.outputs.digest }}
       app-version: ${{ github.event.pull_request.head.sha || github.sha }}
 
   deploy:
