@@ -219,7 +219,8 @@ jobs:
           docker push --all-tags ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}
           echo image_digest=$(docker manifest inspect \
             ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}:sha-${{ github.event.pull_request.head.sha || github.sha }} -v |
-            jq ".Descriptor.digest")
+            jq ".Descriptor.digest") \
+            >> $GITHUB_OUTPUT
         id: docker-push
 
       # - name: Push
@@ -244,7 +245,7 @@ jobs:
           echo "- image size: \`${{ steps.nix-image-tagging.outputs.final_image_size }}\`" >> $GITHUB_STEP_SUMMARY
 
     outputs:
-      docker-image-published-digest: ${{ steps.docker-push.outputs.digest }}
+      docker-image-published-digest: ${{ steps.docker-push.outputs.image_digest }}
       app-version: ${{ github.event.pull_request.head.sha || github.sha }}
 
   deploy:
