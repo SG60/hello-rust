@@ -21,7 +21,7 @@ fn clustered_default() -> bool {
     true
 }
 
-#[tracing::instrument]
+#[tracing::instrument(ret, err)]
 pub fn get_settings() -> Result<Settings, figment::Error> {
     Figment::new()
         .merge(Toml::file("hello-rust-config.toml"))

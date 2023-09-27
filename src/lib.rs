@@ -30,6 +30,7 @@ pub async fn run(mut shutdown_rx: tokio::sync::watch::Receiver<()>) -> anyhow::R
         tracing_utils::set_up_logging()?;
 
         // Env vars! -----------------------------------
+        event!(Level::INFO, "Looking for settings.");
         let settings_map = do_with_retries_sync(
             settings::get_settings,
             RetryConfig {
