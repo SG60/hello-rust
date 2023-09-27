@@ -12,7 +12,7 @@ use typeshare::typeshare;
 
 use crate::{do_with_retries, RetryConfig};
 
-#[tracing::instrument]
+#[tracing::instrument(ret)]
 pub async fn load_client() -> Client {
     let config = aws_config::load_from_env().await;
     aws_sdk_dynamodb::Client::new(&config)
@@ -23,7 +23,7 @@ pub async fn load_client() -> Client {
 /// # Errors
 ///
 /// This function will return an error if the dynamo response fails.
-#[tracing::instrument]
+#[tracing::instrument(ret, err)]
 pub async fn get_users(client: &Client) -> Result<Vec<UserRecord>, DatabaseRequestError> {
     let paginator = client
         .query()
@@ -43,7 +43,7 @@ pub async fn get_users(client: &Client) -> Result<Vec<UserRecord>, DatabaseReque
     Ok(users)
 }
 
-#[tracing::instrument]
+#[tracing::instrument(err)]
 pub async fn get_single_user(
     client: &Client,
     user_id: String,
@@ -88,7 +88,7 @@ pub struct UserRecordNotionData {
     pub notion_access_token: String,
 }
 
-#[tracing::instrument]
+#[tracing::instrument(err)]
 pub async fn get_sync_record(
     client: &Client,
     user_id: &str,
@@ -110,7 +110,7 @@ pub async fn get_sync_record(
     Ok(sync_records)
 }
 
-#[tracing::instrument]
+#[tracing::instrument(err)]
 pub async fn get_sync_records(client: &Client) -> Result<Vec<SyncRecord>, DatabaseRequestError> {
     let paginator = client
         .query()
@@ -130,7 +130,7 @@ pub async fn get_sync_records(client: &Client) -> Result<Vec<SyncRecord>, Databa
     Ok(sync_records)
 }
 
-#[tracing::instrument(level = "trace")]
+#[tracing::instrument(level = "trace", ret, err)]
 async fn get_sync_records_for_one_partition(
     client: &Client,
     partition: u16,
