@@ -4,7 +4,7 @@ on:
   push:
     branches: ["main"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "notion-api-polling"]
     types: [opened, reopened, ready_for_review, synchronize]
   workflow_dispatch:
 
@@ -57,6 +57,14 @@ jobs:
   build:
     # runs-on: [self-hosted, linux, ARM64]
     runs-on: ubuntu-latest
+    services:
+      # Run a local docker registry
+      # This is needed for pushing the multiarch base image to,
+      # because buildkit can't access a loaded image for another architecture
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
     strategy:
       matrix:
         target:
@@ -65,9 +73,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target.rust }}
+      # - uses: dtolnay/rust-toolchain@stable
+      #   with:
+      #     targets: ${{ matrix.target.rust }}
 
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: cachix/cachix-action@v12
@@ -88,28 +96,39 @@ jobs:
           version: v0.11.2
           endpoint: builders
           install: true
+          # required for the docker buildx container to connect to the localhost registry
+          driver-opts: network=host
 
       # TODO: Make this build across a matrix, and then merge the images into a docker manifest in another step
       - name: nix build
         run: nix build -L .#docker/${{ matrix.target.nix }} && ./result | docker load
 
-      # Should probably just prebuild a docker container for Cross, and put it on DockerHub or somewhere similar
-      - run: cargo install cross
-      # - uses: rui314/setup-mold@v1
-      - name: Build Docker image for cross
-        uses: docker/build-push-action@v3
-        with:
-          context: .
-          file: CrossDockerfile
-          push: false
-          load: true
-          tags: cross-docker-image:tag
-          build-args: CROSS_BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.target.rust }}:latest
-          cache-from: type=gha,scope=cross-docker-image
-          cache-to: type=gha,scope=cross-docker-image
-      - name: Build binary of project using cross
+      # # Should probably just prebuild a docker container for Cross, and put it on DockerHub or somewhere similar
+      # - run: cargo install cross
+      # # - uses: rui314/setup-mold@v1
+      # - name: Build Docker image for cross
+      #   uses: docker/build-push-action@v3
+      #   with:
+      #     context: .
+      #     file: CrossDockerfile
+      #     push: false
+      #     load: true
+      #     tags: cross-docker-image:tag
+      #     build-args: CROSS_BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.target.rust }}:latest
+      #     cache-from: type=gha,scope=cross-docker-image
+      #     cache-to: type=gha,scope=cross-docker-image
+      # - name: Build binary of project using cross
+      #   run: |
+      #     cross build --target=${{ matrix.target.rust }} --release
+
+      - name: nix build base docker image
         run: |
-          cross build --target=${{ matrix.target.rust }} --release
+          nix build -L .#dockerDependenciesOnly/${{ matrix.target.nix }} && ./result | docker load
+          docker tag hello-rust-backend-dependencies:nix-latest-build-tag localhost:5000/hello-rust-backend-dependencies:nix-latest-build-tag
+          docker push localhost:5000/hello-rust-backend-dependencies:nix-latest-build-tag
+      - name: Build binary of project using nix shell
+        run: |
+          nix develop .#buildShell/${{ matrix.target.nix }} -c cargo build --target=${{ matrix.target.rust }} --release
 
       - name: Login to Docker Hub
         uses: docker/login-action@v2
@@ -148,17 +167,30 @@ jobs:
           # doesn't need to have the correct final tag or labels here, this build just puts
           # something in the local cache rather than pushing it. Correct tags and labels
           # are set in the next docker/build-push-action
-          tags: image:built-unscanned-image
+          tags: docker-built-image:latest-image
           cache-from: type=gha
-          cache-to: type=local,dest=buildkit-docker-cache-location
+          # cache-to: type=local,dest=buildkit-docker-cache-location
+          cache-to: type=gha
           platforms: linux/arm64
-          build-args: RUST_TARGET_DIR=target/${{ matrix.target.rust }}/release
+          # BASE_IMAGE referring to the nix built base docker image
+          build-args: |
+            RUST_TARGET_DIR=target/${{ matrix.target.rust }}/release
+            BASE_IMAGE=localhost:5000/hello-rust-backend-dependencies:nix-latest-build-tag
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          # image-ref: image:built-unscanned-image
           image-ref: hello-rust-backend:nix-latest-build-tag
+          format: "table"
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: docker-built-image:latest-image
           format: "table"
           exit-code: "1"
           ignore-unfixed: true
@@ -168,21 +200,28 @@ jobs:
       # size comparison
       - name: size comparison
         run: |
-          echo nix:
-          echo $(docker image ls hello-rust-backend:nix-latest-build-tag --format "{{.Size}}")
-          echo cross:
-          echo $(docker image ls image:built-unscanned-image --format "{{.Size}}")
+          echo "# Size Comparison" >> "$GITHUB_STEP_SUMMARY"
+          echo nix: $(docker image ls hello-rust-backend:nix-latest-build-tag --format "{{.Size}}") >> "$GITHUB_STEP_SUMMARY"
+          echo cross: $(docker image ls docker-built-image:latest-image --format "{{.Size}}") >> "$GITHUB_STEP_SUMMARY"
 
       # tag nix image
       - run: |
-          echo image_id=`docker image ls hello-rust-backend:nix-latest-build-tag --format "{{.ID}}"`
-          echo image_id=`docker image ls hello-rust-backend:nix-latest-build-tag --format "{{.ID}}"` >> "$GITHUB_OUTPUT"
-          echo "${{steps.meta.outputs.tags}}" | xargs -n1 docker tag hello-rust-backend:nix-latest-build-tag
-          docker rmi hello-rust-backend:nix-latest-build-tag
+          # export IMAGE_TO_RETAG_AND_PUSH="hello-rust-backend:nix-latest-build-tag"
+          export IMAGE_TO_RETAG_AND_PUSH="docker-built-image:latest-image"
+          echo image_id=`docker image ls $IMAGE_TO_RETAG_AND_PUSH --format "{{.ID}}"`
+          echo image_id=`docker image ls $IMAGE_TO_RETAG_AND_PUSH --format "{{.ID}}"` >> "$GITHUB_OUTPUT"
+          echo final_image_size=$(docker image ls $IMAGE_TO_RETAG_AND_PUSH --format "{{.Size}}") >> "$GITHUB_OUTPUT"
+          echo "${{steps.meta.outputs.tags}}" | xargs -n1 docker tag $IMAGE_TO_RETAG_AND_PUSH
+          docker rmi $IMAGE_TO_RETAG_AND_PUSH
         id: nix-image-tagging
       - run: |
           echo ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}
           docker push --all-tags ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}
+          echo image_digest=$(docker manifest inspect \
+            ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}:sha-${{ github.event.pull_request.head.sha || github.sha }} -v |
+            jq ".Descriptor.digest") \
+            >> $GITHUB_OUTPUT
+        id: docker-push
 
       # - name: Push
       #   id: build-and-push-action
@@ -200,12 +239,13 @@ jobs:
       - name: Job summary info (as markdown)
         run: |
           echo "# Built image info" >> $GITHUB_STEP_SUMMARY
-          echo "- image digest: \`${{ steps.build-and-push-action.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- image digest: \`${{ steps.docker-push.outputs.image_digest }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- revision (commit-sha): \`${{ github.event.pull_request.head.sha || github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- tags: \`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- image size: \`${{ steps.nix-image-tagging.outputs.final_image_size }}\`" >> $GITHUB_STEP_SUMMARY
 
     outputs:
-      docker-image-published-digest: ${{ steps.build-and-push-action.outputs.digest }}
+      docker-image-published-digest: ${{ steps.docker-push.outputs.image_digest }}
       app-version: ${{ github.event.pull_request.head.sha || github.sha }}
 
   deploy:

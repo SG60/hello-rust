@@ -2,9 +2,11 @@
 
 set dotenv-load := true
 
+# list available recipes
 default:
     @just --list
 
+# interactive recipe picker
 j:
     just --choose
 
@@ -28,16 +30,11 @@ test-stdout *FLAGS:
 test-all *FLAGS:
     just test --include-ignored {{ FLAGS }}
 
-# build for arm64
-build-arm64:
-    cross build --target=aarch64-unknown-linux-gnu --release
-
 jaeger:
     docker run --name jaeger -p 4317:4317 -p 16686:16686 -e COLLECTOR_OTLP_ENABLED=true jaegertracing/all-in-one:latest
 
 # Fetch the protobuf files for the etcd API
 # version required (e.g. 3.5.7)
-
 # Will still require some tweaking after the download
 fetch-etcd-protobuf-files +VERSION:
     mkdir etcd-api-protos/etcd-repo
@@ -75,26 +72,32 @@ docker-with-cleanup just-cmd-and-container-name="etcd":
 
 backend_etcd_related_env := "HOSTNAME=" + uuid() + " APP_ETCD_URL=http://localhost:2379"
 
-# Run against local etcd
-run-with-etcd:
-    {{ backend_etcd_related_env }} just run
-
 export RUST_LOG := "hello_rust_backend=debug"
 export NO_OTLP := "1"
 
+# run, with the local etcd instance, and watch for changes
 dev:
     {{ backend_etcd_related_env }} cargo watch -x run
 
 run-with-etcd-and-otlp $NO_OTLP="0":
     {{ backend_etcd_related_env }} cargo run
 
-run-for-tokio-console $RUSTFLAGS="--cfg tokio_unstable" $NO_OTLP="1":
-    {{ backend_etcd_related_env }} cargo run --features=tokio-console
-
-tokio-console:
-  tokio-console
+# Cross compile using nix
+cross-build nix-target="aarch64-linux" cargo-target="aarch64-unknown-linux-gnu" profile="release":
+  nix develop .#buildShell/{{nix-target}} -c cargo build --target={{cargo-target}} --profile {{profile}}
 
 # Cross compile using nix
-cross-build nix-target="aarch64-multiplatform" cargo-target="aarch64-unknown-linux-gnu" profile="release":
-  nix develop '.#pkgsCross.{{nix-target}}.hello-rust' -c cargo build --target {{cargo-target}} --profile {{profile}}
+cross-run nix-target="aarch64-linux" cargo-target="aarch64-unknown-linux-gnu" profile="release":
+  nix develop .#buildShell/{{nix-target}} -c cargo run --target={{cargo-target}} --profile {{profile}}
 
+# Build docker base image
+docker-build-base-image nix-target="aarch64-linux":
+  nix build -L .#dockerDependenciesOnly/{{nix-target}} && ./result | docker load
+
+# Docker build
+docker-build nix-target="aarch64-linux" docker-target="linux/arm64" cargo-target="aarch64-unknown-linux-gnu": (docker-build-base-image nix-target) (cross-build nix-target cargo-target)
+  docker buildx build \
+      --build-arg RUST_TARGET_DIR=target/{{cargo-target}}/release \
+      --build-arg BASE_IMAGE=hello-rust-backend-dependencies:nix-latest-build-tag \
+      --file Dockerfile \
+      --platform {{docker-target}} --tag hello-rust-backend:latest --load .
