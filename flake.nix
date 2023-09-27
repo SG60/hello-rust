@@ -130,9 +130,6 @@
                   Entrypoint = [ "${hello-rust}/bin/hello-rust-backend" ];
                 };
               };
-
-
-
             in
             lib.attrsets.recurseIntoAttrs
               {
@@ -144,8 +141,21 @@
                   '';
                 };
 
-                buildShell = craneLib.devShell {
-                  packages = [ fenix.packages.${system}.stable.clippy ] ++ cross-common-args.nativeBuildInputs;
+                buildShell = craneLib.devShell (cross-common-args // {
+                  # Automatically inherit any build inputs from `my-crate`
+                  inputsFrom = [ hello-rust ];
+                  # Extra inputs (only used for interactive development)
+                  # can be added here; cargo and rustc are provided by default.
+                  packages = [ fenix.packages.${system}.stable.clippy pkgs.just ];
+                });
+
+                # Install only the dependencies into a docker image.
+                # This requires adding the dependencies manually.
+                dockerDependenciesOnly = pkgs.dockerTools.streamLayeredImage {
+                  name = "hello-rust-backend-dependencies";
+                  tag = "nix-latest-build-tag";
+                  architecture = nixTargetsToDockerArch.${targetSystem};
+                  contents = [ nix-cross-pkgs.stdenv.cc.libc pkgs.cacert ];
                 };
 
                 # Run clippy (and deny all warnings) on the crate source,
@@ -171,7 +181,7 @@
         filterFlattenedByPrefixes = with lib.attrsets // lib.strings;  prefixes: attrset: filterAttrs (name: v: builtins.foldl' (a: b: a || hasPrefix b name) false prefixes) attrset;
 
         cross-flattened = flattenOneLevel cross-results;
-        crossPackages = filterFlattenedByPrefixes [ "docker/" "bin/" ] cross-flattened;
+        crossPackages = filterFlattenedByPrefixes [ "docker/" "bin/" "dockerDependenciesOnly/" ] cross-flattened;
         crossApps = filterFlattenedByPrefixes [ "app/" ] cross-flattened;
         crossBuildShells = filterFlattenedByPrefixes [ "buildShell/" ] cross-flattened;
 

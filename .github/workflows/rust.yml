@@ -65,9 +65,9 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target.rust }}
+      # - uses: dtolnay/rust-toolchain@stable
+      #   with:
+      #     targets: ${{ matrix.target.rust }}
 
       - uses: DeterminateSystems/nix-installer-action@main
       - uses: cachix/cachix-action@v12
@@ -93,23 +93,29 @@ jobs:
       - name: nix build
         run: nix build -L .#docker/${{ matrix.target.nix }} && ./result | docker load
 
-      # Should probably just prebuild a docker container for Cross, and put it on DockerHub or somewhere similar
-      - run: cargo install cross
-      # - uses: rui314/setup-mold@v1
-      - name: Build Docker image for cross
-        uses: docker/build-push-action@v3
-        with:
-          context: .
-          file: CrossDockerfile
-          push: false
-          load: true
-          tags: cross-docker-image:tag
-          build-args: CROSS_BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.target.rust }}:latest
-          cache-from: type=gha,scope=cross-docker-image
-          cache-to: type=gha,scope=cross-docker-image
-      - name: Build binary of project using cross
+      # # Should probably just prebuild a docker container for Cross, and put it on DockerHub or somewhere similar
+      # - run: cargo install cross
+      # # - uses: rui314/setup-mold@v1
+      # - name: Build Docker image for cross
+      #   uses: docker/build-push-action@v3
+      #   with:
+      #     context: .
+      #     file: CrossDockerfile
+      #     push: false
+      #     load: true
+      #     tags: cross-docker-image:tag
+      #     build-args: CROSS_BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.target.rust }}:latest
+      #     cache-from: type=gha,scope=cross-docker-image
+      #     cache-to: type=gha,scope=cross-docker-image
+      # - name: Build binary of project using cross
+      #   run: |
+      #     cross build --target=${{ matrix.target.rust }} --release
+
+      - name: nix build base docker image
+        run: nix build -L .#dockerDependenciesOnly/${{ matrix.target.nix }} && ./result | docker load
+      - name: Build binary of project using nix shell
         run: |
-          cross build --target=${{ matrix.target.rust }} --release
+          nix develop .#buildShell/${{ matrix.target.nix }} -c cargo build --target=${{ matrix.target.rust }} --release
 
       - name: Login to Docker Hub
         uses: docker/login-action@v2
@@ -152,7 +158,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=local,dest=buildkit-docker-cache-location
           platforms: linux/arm64
-          build-args: RUST_TARGET_DIR=target/${{ matrix.target.rust }}/release
+          # BASE_IMAGE referring to the nix built base docker image
+          build-args: |
+            RUST_TARGET_DIR=target/${{ matrix.target.rust }}/release
+            BASE_IMAGE=hello-rust-backend-dependencies:nix-latest-build-tag
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
