@@ -167,9 +167,10 @@ jobs:
           # doesn't need to have the correct final tag or labels here, this build just puts
           # something in the local cache rather than pushing it. Correct tags and labels
           # are set in the next docker/build-push-action
-          tags: image:built-unscanned-image
+          tags: docker-built-image:latest-image
           cache-from: type=gha
-          cache-to: type=local,dest=buildkit-docker-cache-location
+          # cache-to: type=local,dest=buildkit-docker-cache-location
+          cache-to: type=gha
           platforms: linux/arm64
           # BASE_IMAGE referring to the nix built base docker image
           build-args: |
@@ -179,8 +180,17 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          # image-ref: image:built-unscanned-image
           image-ref: hello-rust-backend:nix-latest-build-tag
+          format: "table"
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "CRITICAL,HIGH"
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: docker-built-image:latest-image
           format: "table"
           exit-code: "1"
           ignore-unfixed: true
@@ -193,14 +203,17 @@ jobs:
           echo nix:
           echo $(docker image ls hello-rust-backend:nix-latest-build-tag --format "{{.Size}}")
           echo cross:
-          echo $(docker image ls image:built-unscanned-image --format "{{.Size}}")
+          echo $(docker image ls docker-built-image:latest-image --format "{{.Size}}")
 
       # tag nix image
       - run: |
-          echo image_id=`docker image ls hello-rust-backend:nix-latest-build-tag --format "{{.ID}}"`
-          echo image_id=`docker image ls hello-rust-backend:nix-latest-build-tag --format "{{.ID}}"` >> "$GITHUB_OUTPUT"
-          echo "${{steps.meta.outputs.tags}}" | xargs -n1 docker tag hello-rust-backend:nix-latest-build-tag
-          docker rmi hello-rust-backend:nix-latest-build-tag
+          # export IMAGE_TO_RETAG_AND_PUSH="hello-rust-backend:nix-latest-build-tag"
+          export IMAGE_TO_RETAG_AND_PUSH="docker-built-image:latest-image"
+          echo image_id=`docker image ls $IMAGE_TO_RETAG_AND_PUSH --format "{{.ID}}"`
+          echo image_id=`docker image ls $IMAGE_TO_RETAG_AND_PUSH --format "{{.ID}}"` >> "$GITHUB_OUTPUT"
+          echo final_image_size=$(docker image ls $IMAGE_TO_RETAG_AND_PUSH --format "{{.Size}}") >> "$GITHUB_OUTPUT"
+          echo "${{steps.meta.outputs.tags}}" | xargs -n1 docker tag $IMAGE_TO_RETAG_AND_PUSH
+          docker rmi $IMAGE_TO_RETAG_AND_PUSH
         id: nix-image-tagging
       - run: |
           echo ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}
@@ -225,6 +238,7 @@ jobs:
           echo "- image digest: \`${{ steps.build-and-push-action.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- revision (commit-sha): \`${{ github.event.pull_request.head.sha || github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- tags: \`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- image size: \`${{ steps.nix-image-tagging.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
 
     outputs:
       docker-image-published-digest: ${{ steps.build-and-push-action.outputs.digest }}
