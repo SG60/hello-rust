@@ -4,7 +4,7 @@ on:
   push:
     branches: ["main"]
   pull_request:
-    branches: ["main", "notion-api-polling"]
+    branches: ["main"]
     types: [opened, reopened, ready_for_review, synchronize]
   workflow_dispatch:
 
@@ -205,7 +205,8 @@ jobs:
           echo cross: $(docker image ls docker-built-image:latest-image --format "{{.Size}}") >> "$GITHUB_STEP_SUMMARY"
 
       # tag nix image
-      - run: |
+      - name: re-tag docker image and get the image id and final image size
+        run: |
           # export IMAGE_TO_RETAG_AND_PUSH="hello-rust-backend:nix-latest-build-tag"
           export IMAGE_TO_RETAG_AND_PUSH="docker-built-image:latest-image"
           echo image_id=`docker image ls $IMAGE_TO_RETAG_AND_PUSH --format "{{.ID}}"`
@@ -214,7 +215,8 @@ jobs:
           echo "${{steps.meta.outputs.tags}}" | xargs -n1 docker tag $IMAGE_TO_RETAG_AND_PUSH
           docker rmi $IMAGE_TO_RETAG_AND_PUSH
         id: nix-image-tagging
-      - run: |
+      - name: docker push (and get digest)
+        run: |
           echo ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}
           docker push --all-tags ${{ env.DOCKER_CONTAINER_IMAGE_BASE }}
           echo image_digest=$(docker manifest inspect \
@@ -222,19 +224,6 @@ jobs:
             jq ".Descriptor.digest") \
             >> $GITHUB_OUTPUT
         id: docker-push
-
-      # - name: Push
-      #   id: build-and-push-action
-      #   uses: docker/build-push-action@v3
-      #   with:
-      #     context: .
-      #     file: Dockerfile
-      #     push: true
-      #     tags: ${{ steps.meta.outputs.tags }}
-      #     labels: ${{ steps.meta.outputs.labels }}
-      #     cache-from: type=local,src=buildkit-docker-cache-location
-      #     cache-to: type=gha
-      #     platforms: linux/arm64
 
       - name: Job summary info (as markdown)
         run: |
