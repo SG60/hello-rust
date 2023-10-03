@@ -1,8 +1,8 @@
 <div align="center">
 
-# hello-rust
+# EventSpider
 
-frontend - https://github.com/SG60/hello-rust-frontend
+frontend - https://github.com/SG60/EventSpider-frontend
 https://www.notion.so/samgreening/Notion-Block-Sync-b0735065a45d48d6aeaef63bf07b7a96
 
 <details>
@@ -14,7 +14,7 @@ https://eu-west-2.console.aws.amazon.com/dynamodbv2/home?region=eu-west-2#item-e
 
 </details>
 
-[![Rust](https://github.com/SG60/hello-rust/actions/workflows/rust.yml/badge.svg)](https://github.com/SG60/hello-rust/actions/workflows/rust.yml) [![App Status](https://argocd.herd.samgreening.com/api/badge?name=hello-rust-notion-sync&revision=true)](https://argocd.herd.samgreening.com/applications/hello-rust-notion-sync)
+[![Rust](https://github.com/SG60/EventSpider/actions/workflows/rust.yml/badge.svg)](https://github.com/SG60/EventSpider/actions/workflows/rust.yml)
 
 [Terraform Cloud for deploying changes to DynamoDB](https://app.terraform.io/app/samgreening/workspaces/notion_sync)
 
@@ -90,4 +90,4 @@ https://web.postman.co/workspace/fe759fe4-0286-4679-860f-6dc84d8af0fc
 
 Deployed to Oracle kubernetes cluster.
 
-https://github.com/SG60/hello-rust-infrastructure-config
+https://github.com/SG60/EventSpider-infrastructure-config
