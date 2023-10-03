@@ -2,7 +2,7 @@
 name = "hello-rust-backend"
 version = "0.3.0"
 edition = "2021"
-license = "GPL-3.0-or-later"
+license = "AGPL-3.0-or-later"
 default-run = "hello-rust-backend"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
