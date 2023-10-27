@@ -582,6 +582,15 @@ pub async fn start_sync_pipeline(
                     dbg!(current_user_creds);
 
                     println!("SHOULD GET NOTION DATA FOR THIS USER");
+                    let notion_data = current_user_creds.notion_data.as_ref().unwrap();
+                    let notion_client = notion_api::NotionClientUnauthenticated::new();
+                    let x = notion_client
+                        .get_pages_from_notion_database(
+                            &notion_data.notion_access_token,
+                            "asdfasdf",
+                        )
+                        .await;
+                    dbg!(x.unwrap());
 
                     println!(
                         "THEN GET GOOGLE CALENDAR RECENTLY EDITED STUFF (USING SYNC ENDPOINT?)"
