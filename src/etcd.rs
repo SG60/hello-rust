@@ -18,8 +18,8 @@ use tonic::transport::Endpoint;
 use tonic::Streaming;
 use tracing::{event, span, Instrument, Level};
 
-use crate::tracing_utils::GrpcInterceptor;
-use crate::tracing_utils::InterceptedGrpcService;
+use opentelemetry_tracing_utils::GrpcInterceptor;
+use opentelemetry_tracing_utils::InterceptedGrpcService;
 
 #[allow(clippy::all)]
 pub mod mvccpb {

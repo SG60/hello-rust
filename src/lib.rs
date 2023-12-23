@@ -23,11 +23,10 @@ pub mod notion_api;
 pub mod settings;
 mod source_gcal;
 mod source_notion;
-pub mod tracing_utils;
 
 pub async fn run(mut shutdown_rx: tokio::sync::watch::Receiver<()>) -> anyhow::Result<()> {
     let init_stuff_that_can_be_shutdown_immediately = async move {
-        tracing_utils::set_up_logging()?;
+        opentelemetry_tracing_utils::set_up_logging()?;
 
         // Env vars! -----------------------------------
         event!(Level::INFO, "Looking for settings.");

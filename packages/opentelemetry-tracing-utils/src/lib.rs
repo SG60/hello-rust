@@ -1,4 +1,6 @@
 //! Utilities for tracing and logging.
+//!
+//! Some fairly opinionated!
 
 use anyhow::Result;
 use std::str::FromStr;
