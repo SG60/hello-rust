@@ -5,6 +5,14 @@ edition = "2021"
 license = "AGPL-3.0-or-later"
 default-run = "hello-rust-backend"
 
+[workspace]
+members = ["packages/*"]
+
+[workspace.package]
+edition = "2021"
+license = "AGPL-3.0-or-later"
+authors = ["Sam Greening"]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [features]
@@ -47,6 +55,8 @@ tracing-subscriber = { version = "0.3.16", features = ["json", "env-filter"] }
 tracing-serde = "0.1.3"
 # tokion console async debugger
 console-subscriber = { version = "0.1.10", optional = true }
+
+opentelemetry-tracing-utils = { path = "packages/opentelemetry-tracing-utils" }
 
 # GRPC (used for connecting to etcd)
 tonic = "0.8.3"

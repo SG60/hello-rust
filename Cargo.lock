@@ -888,6 +888,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry-semantic-conventions",
+ "opentelemetry-tracing-utils",
  "prost",
  "reqwest",
  "serde",
@@ -1334,6 +1335,10 @@ checksum = "9b02e0230abb0ab6636d18e2ba8fa02903ea63772281340ccac18e0af3ec9eeb"
 dependencies = [
  "opentelemetry",
 ]
+
+[[package]]
+name = "opentelemetry-tracing-utils"
+version = "0.1.0"
 
 [[package]]
 name = "opentelemetry_api"
