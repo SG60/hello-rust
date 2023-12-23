@@ -1339,6 +1339,20 @@ dependencies = [
 [[package]]
 name = "opentelemetry-tracing-utils"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "opentelemetry",
+ "opentelemetry-otlp",
+ "opentelemetry-semantic-conventions",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tonic 0.8.3",
+ "tracing",
+ "tracing-opentelemetry",
+ "tracing-serde",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "opentelemetry_api"
