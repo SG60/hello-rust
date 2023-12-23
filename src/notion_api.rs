@@ -64,6 +64,12 @@ impl NotionClientUnauthenticated {
     }
 }
 
+impl Default for NotionClientUnauthenticated {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 trait NotionRequestBuilder {
     fn add_notion_authorisation_token(self, authorisation_token: &str) -> reqwest::RequestBuilder;
 }

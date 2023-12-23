@@ -1,5 +1,7 @@
 name: Rust
 
+# TODO: Add a job to release the tracing-utils crate!!
+
 on:
   push:
     branches: ["main"]
