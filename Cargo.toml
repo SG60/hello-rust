@@ -12,6 +12,8 @@ members = ["packages/*"]
 edition = "2021"
 license = "AGPL-3.0-or-later"
 authors = ["Sam Greening"]
+homepage = "https://github.com/SG60/EventSpider"
+repository = "https://github.com/SG60/EventSpider"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
