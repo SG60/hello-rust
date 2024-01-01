@@ -18,6 +18,8 @@ use self::trace_output_fmt::JsonWithTraceId;
 
 pub mod trace_output_fmt;
 
+pub use opentelemetry::global::shutdown_tracer_provider;
+
 /// Set up an OTEL pipeline when the OTLP endpoint is set. Otherwise just set up tokio tracing
 /// support.
 pub fn set_up_logging() -> Result<()> {
