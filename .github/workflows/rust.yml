@@ -103,28 +103,6 @@ jobs:
           # required for the docker buildx container to connect to the localhost registry
           driver-opts: network=host
 
-      # TODO: Make this build across a matrix, and then merge the images into a docker manifest in another step
-      - name: nix build
-        run: nix build -L .#docker/${{ matrix.target.nix }} && ./result | docker load
-
-      # # Should probably just prebuild a docker container for Cross, and put it on DockerHub or somewhere similar
-      # - run: cargo install cross
-      # # - uses: rui314/setup-mold@v1
-      # - name: Build Docker image for cross
-      #   uses: docker/build-push-action@v3
-      #   with:
-      #     context: .
-      #     file: CrossDockerfile
-      #     push: false
-      #     load: true
-      #     tags: cross-docker-image:tag
-      #     build-args: CROSS_BASE_IMAGE=ghcr.io/cross-rs/${{ matrix.target.rust }}:latest
-      #     cache-from: type=gha,scope=cross-docker-image
-      #     cache-to: type=gha,scope=cross-docker-image
-      # - name: Build binary of project using cross
-      #   run: |
-      #     cross build --target=${{ matrix.target.rust }} --release
-
       - name: nix build base docker image
         run: |
           nix build -L .#dockerDependenciesOnly/${{ matrix.target.nix }} && ./result | docker load
@@ -184,16 +162,6 @@ jobs:
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: hello-rust-backend:nix-latest-build-tag
-          format: "table"
-          exit-code: "1"
-          ignore-unfixed: true
-          vuln-type: "os,library"
-          severity: "CRITICAL,HIGH"
-
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
           image-ref: docker-built-image:latest-image
           format: "table"
           exit-code: "1"
@@ -201,17 +169,9 @@ jobs:
           vuln-type: "os,library"
           severity: "CRITICAL,HIGH"
 
-      # size comparison
-      - name: size comparison
-        run: |
-          echo "# Size Comparison" >> "$GITHUB_STEP_SUMMARY"
-          echo nix: $(docker image ls hello-rust-backend:nix-latest-build-tag --format "{{.Size}}") >> "$GITHUB_STEP_SUMMARY"
-          echo cross: $(docker image ls docker-built-image:latest-image --format "{{.Size}}") >> "$GITHUB_STEP_SUMMARY"
-
       # tag nix image
       - name: re-tag docker image and get the image id and final image size
         run: |
-          # export IMAGE_TO_RETAG_AND_PUSH="hello-rust-backend:nix-latest-build-tag"
           export IMAGE_TO_RETAG_AND_PUSH="docker-built-image:latest-image"
           echo image_id=`docker image ls $IMAGE_TO_RETAG_AND_PUSH --format "{{.ID}}"`
           echo image_id=`docker image ls $IMAGE_TO_RETAG_AND_PUSH --format "{{.ID}}"` >> "$GITHUB_OUTPUT"
