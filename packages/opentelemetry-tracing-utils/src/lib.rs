@@ -9,7 +9,7 @@ use tracing_opentelemetry::OpenTelemetryLayer;
 // tracing
 use opentelemetry::{global, trace::TracerProvider as _};
 use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::TracerProvider};
-use opentelemetry_semantic_conventions as semcov;
+pub use opentelemetry_semantic_conventions as semcov;
 use tonic::{metadata::MetadataKey, service::Interceptor};
 use tracing::Span;
 pub use tracing_opentelemetry::OpenTelemetrySpanExt;
@@ -37,12 +37,6 @@ pub fn set_up_logging() -> Result<()> {
     global::set_text_map_propagator(TraceContextPropagator::new());
 
     let provider = TracerProvider::builder()
-        // .with_config(opentelemetry_sdk::trace::config().with_resource(
-        //     opentelemetry_sdk::Resource::new(vec![
-        //         semcov::resource::SERVICE_NAME.string(env!("CARGO_PKG_NAME")),
-        //         semcov::resource::SERVICE_VERSION.string(env!("CARGO_PKG_VERSION")),
-        //     ]),
-        // ))
         .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
         .build();
     let basic_no_otlp_tracer = provider.tracer(env!("CARGO_PKG_NAME"));
@@ -50,13 +44,8 @@ pub fn set_up_logging() -> Result<()> {
     // Install a new OpenTelemetry trace pipeline
     let otlp_tracer = opentelemetry_otlp::new_pipeline()
         .tracing()
-        // config, service.name etc.
-        .with_trace_config(opentelemetry_sdk::trace::config().with_resource(
-            opentelemetry_sdk::Resource::new(vec![
-                semcov::resource::SERVICE_NAME.string(env!("CARGO_PKG_NAME")),
-                semcov::resource::SERVICE_VERSION.string(env!("CARGO_PKG_VERSION")),
-            ]),
-        ))
+        // trace config. Collects service.name etc.
+        .with_trace_config(opentelemetry_sdk::trace::config())
         .with_exporter(opentelemetry_otlp::new_exporter().tonic())
         .install_batch(opentelemetry_sdk::runtime::TokioCurrentThread)?;
 
