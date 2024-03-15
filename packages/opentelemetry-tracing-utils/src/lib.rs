@@ -14,7 +14,7 @@ use tonic::{metadata::MetadataKey, service::Interceptor};
 use tracing::Span;
 pub use tracing_opentelemetry::OpenTelemetrySpanExt;
 use tracing_subscriber::{
-    fmt::{self, format::FmtSpan},
+    fmt::{self, format::FmtSpan, TestWriter},
     layer::SubscriberExt,
     util::SubscriberInitExt,
     EnvFilter, Layer,
@@ -29,72 +29,128 @@ pub use opentelemetry::global::shutdown_tracer_provider;
 /// Set up an OTEL pipeline when the OTLP endpoint is set. Otherwise just set up tokio tracing
 /// support.
 pub fn set_up_logging() -> Result<()> {
-    let otlp_enabled = std::env::var("NO_OTLP")
-        .unwrap_or_else(|_| "0".to_owned())
-        .as_str()
-        == "0";
+    LoggingSetupBuilder::new().build()
+}
 
-    global::set_text_map_propagator(TraceContextPropagator::new());
+#[derive(Debug)]
+pub struct LoggingSetupBuilder {
+    pub otlp_output_enabled: bool,
+    pub pretty_logs: bool,
+    pub use_test_writer: bool,
+}
+impl Default for LoggingSetupBuilder {
+    fn default() -> Self {
+        let otlp_enabled = std::env::var("NO_OTLP")
+            .unwrap_or_else(|_| "0".to_owned())
+            .as_str()
+            == "0";
 
-    let provider = TracerProvider::builder()
-        .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
-        .build();
-    let basic_no_otlp_tracer = provider.tracer(env!("CARGO_PKG_NAME"));
+        // either use the otlp state or PRETTY_LOGS env var to decide log format
+        let pretty_logs = std::env::var("PRETTY_LOGS")
+            .map(|e| &e == "1")
+            .unwrap_or_else(|_| !otlp_enabled);
 
-    // Install a new OpenTelemetry trace pipeline
-    let otlp_tracer = opentelemetry_otlp::new_pipeline()
-        .tracing()
-        // trace config. Collects service.name etc.
-        .with_trace_config(opentelemetry_sdk::trace::config())
-        .with_exporter(opentelemetry_otlp::new_exporter().tonic())
-        .install_batch(opentelemetry_sdk::runtime::TokioCurrentThread)?;
+        Self {
+            otlp_output_enabled: otlp_enabled,
+            pretty_logs,
+            use_test_writer: false,
+        }
+    }
+}
 
-    let tracer = match otlp_enabled {
-        true => otlp_tracer,
-        // BUG: the non-otlp tracer isn't correctly setting context/linking ids
-        false => basic_no_otlp_tracer,
-    };
+impl LoggingSetupBuilder {
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn build(&self) -> Result<()> {
+        let otlp_enabled = self.otlp_output_enabled;
 
-    // Create a tracing layer with the configured tracer
-    let opentelemetry: OpenTelemetryLayer<_, _> = tracing_opentelemetry::layer()
-        .with_error_fields_to_exceptions(true)
-        .with_error_records_to_exceptions(true)
-        .with_tracer(tracer);
+        global::set_text_map_propagator(TraceContextPropagator::new());
 
-    let fmt_layer = fmt::Layer::default().json().event_format(JsonWithTraceId);
-    let pretty_fmt_layer = fmt::Layer::default()
-        .pretty()
-        .with_span_events(FmtSpan::NONE);
+        let provider = TracerProvider::builder()
+            .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
+            .build();
+        let basic_no_otlp_tracer = provider.tracer(env!("CARGO_PKG_NAME"));
 
-    // either use the otlp state or PRETTY_LOGS env var to decide log format
-    let pretty_logs = std::env::var("PRETTY_LOGS")
-        .map(|e| &e == "1")
-        .unwrap_or_else(|_| !otlp_enabled);
+        // Install a new OpenTelemetry trace pipeline
+        let otlp_tracer = opentelemetry_otlp::new_pipeline()
+            .tracing()
+            // trace config. Collects service.name etc.
+            .with_trace_config(opentelemetry_sdk::trace::config())
+            .with_exporter(opentelemetry_otlp::new_exporter().tonic())
+            .install_batch(opentelemetry_sdk::runtime::TokioCurrentThread)?;
 
-    let layers = match pretty_logs {
+        let tracer = match otlp_enabled {
+            true => otlp_tracer,
+            // BUG: the non-otlp tracer isn't correctly setting context/linking ids
+            false => basic_no_otlp_tracer,
+        };
+
+        // Create a tracing layer with the configured tracer
+        let opentelemetry: OpenTelemetryLayer<_, _> = tracing_opentelemetry::layer()
+            .with_error_fields_to_exceptions(true)
+            .with_error_records_to_exceptions(true)
+            .with_tracer(tracer);
+
+        let use_test_writer = self.use_test_writer;
+        let pretty_logs = self.pretty_logs;
+
+        #[derive(Debug)]
+        enum MaybeTestWriterLayer<N, E> {
+            WithTestWriter(fmt::Layer<tracing_subscriber::Registry, N, E, TestWriter>),
+            NoTestWriter(fmt::Layer<tracing_subscriber::Registry>),
+        }
+
+        let base_layer = fmt::Layer::default();
+        let base_layer: MaybeTestWriterLayer<_, _> = match use_test_writer {
+            false => MaybeTestWriterLayer::NoTestWriter(base_layer),
+            true => MaybeTestWriterLayer::WithTestWriter(base_layer.with_test_writer()),
+        };
+
         // Include an option for when there is no otlp endpoint available. In this case, pretty print
         // events, as the data doesn't need to be nicely formatted json for analysis.
-        false => opentelemetry.and_then(fmt_layer).boxed(),
-        true => opentelemetry.and_then(pretty_fmt_layer).boxed(),
-    };
+        let format_layers = match pretty_logs {
+            // json fmt layer
+            false => match base_layer {
+                MaybeTestWriterLayer::NoTestWriter(layer) => {
+                    layer.json().event_format(JsonWithTraceId).boxed()
+                }
+                MaybeTestWriterLayer::WithTestWriter(layer) => {
+                    layer.json().event_format(JsonWithTraceId).boxed()
+                }
+            },
+            // pretty fmt layer
+            true => match base_layer {
+                MaybeTestWriterLayer::NoTestWriter(layer) => {
+                    layer.pretty().with_span_events(FmtSpan::NONE).boxed()
+                }
+                MaybeTestWriterLayer::WithTestWriter(layer) => {
+                    layer.pretty().with_span_events(FmtSpan::NONE).boxed()
+                }
+            },
+        };
 
-    let tracing_registry = tracing_subscriber::registry()
-        // Add a filter to the layers so that they only observe the spans that I want
-        .with(layers.with_filter(
-            // Parse env filter from RUST_LOG, setting a default directive if that fails.
-            // Syntax for directives is here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| {
-                // e.g. "RUST_LOG=hello_rust_backend,warn" would do everything from hello_rust_backend, and only "warn" level or higher from elsewhere
-                EnvFilter::try_new("info").expect("hard-coded default directive should be valid")
-            }),
-        ));
+        let layers = opentelemetry.and_then(format_layers);
 
-    #[cfg(feature = "tokio-console")]
-    let tracing_registry = tracing_registry.with(console_subscriber::spawn());
+        let tracing_registry = tracing_subscriber::registry()
+            // Add a filter to the layers so that they only observe the spans that I want
+            .with(layers.with_filter(
+                // Parse env filter from RUST_LOG, setting a default directive if that fails.
+                // Syntax for directives is here: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
+                EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                    // e.g. "RUST_LOG=hello_rust_backend,warn" would do everything from hello_rust_backend, and only "warn" level or higher from elsewhere
+                    EnvFilter::try_new("info")
+                        .expect("hard-coded default directive should be valid")
+                }),
+            ));
 
-    tracing_registry.try_init()?;
+        #[cfg(feature = "tokio-console")]
+        let tracing_registry = tracing_registry.with(console_subscriber::spawn());
 
-    Ok(())
+        tracing_registry.try_init()?;
+
+        Ok(())
+    }
 }
 
 /// This interceptor adds tokio tracing opentelemetry headers to grpc requests.
