@@ -130,7 +130,7 @@ pub async fn get_sync_records(client: &Client) -> Result<Vec<SyncRecord>, Databa
     Ok(sync_records)
 }
 
-#[tracing::instrument(level = "trace", ret, err)]
+#[tracing::instrument(level = "trace", ret, err, fields(n_sync_records))]
 async fn get_sync_records_for_one_partition(
     client: &Client,
     partition: u16,
@@ -154,10 +154,13 @@ async fn get_sync_records_for_one_partition(
 
     let sync_records = from_items(items)?;
 
+    // Record the number of sync records as part of the current span.
+    tracing::Span::current().record("n_sync_records", sync_records.len());
+
     Ok(sync_records)
 }
 
-#[tracing::instrument(ret, err)]
+#[tracing::instrument(ret, err, fields(n_sync_records))]
 pub async fn get_sync_records_for_partitions(
     client: Client,
     partitions: Vec<u16>,
@@ -199,6 +202,9 @@ pub async fn get_sync_records_for_partitions(
     }
 
     trace!("{:#?}", &sync_records);
+
+    // Record the number of sync records as part of the current span.
+    tracing::Span::current().record("n_sync_records", sync_records.len());
 
     Ok(sync_records)
 }

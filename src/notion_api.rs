@@ -28,22 +28,12 @@ pub struct NotionPageObject {
 }
 
 pub trait NotionReqwest {
-    fn add_notion_headers(
-        self,
-        authorisation_token: &str,
-    ) -> Result<ClientBuilder, InvalidHeaderValue>;
+    fn add_notion_headers(self) -> Result<ClientBuilder, InvalidHeaderValue>;
 }
 impl NotionReqwest for reqwest::ClientBuilder {
-    fn add_notion_headers(
-        self,
-        authorisation_token: &str,
-    ) -> Result<ClientBuilder, InvalidHeaderValue> {
+    fn add_notion_headers(self) -> Result<ClientBuilder, InvalidHeaderValue> {
         // Default headers for notion client
         let mut headers = reqwest::header::HeaderMap::new();
-        headers.insert(
-            reqwest::header::AUTHORIZATION,
-            reqwest::header::HeaderValue::from_str(&("Bearer ".to_string() + authorisation_token))?,
-        );
         headers.insert(
             "Notion-Version",
             reqwest::header::HeaderValue::from_static("2022-06-28"),
@@ -52,25 +42,52 @@ impl NotionReqwest for reqwest::ClientBuilder {
         Ok(self.default_headers(headers))
     }
 }
-pub fn _make_notion_client(authorisation_token: &str) -> reqwest::Client {
+
+pub struct NotionClientUnauthenticated(reqwest::Client);
+impl NotionClientUnauthenticated {
+    pub fn new() -> Self {
+        Self(make_notion_client())
+    }
+
+    pub async fn get_pages_from_notion_database(
+        &self,
+        authorisation_token: &str,
+        database_id: &str,
+    ) -> Result<NotionPagesResponse, reqwest::Error> {
+        self.0
+            .post("https://api.notion.com/v1/databases/".to_owned() + database_id + "/query")
+            .add_notion_authorisation_token(authorisation_token)
+            .send()
+            .await?
+            .json()
+            .await
+    }
+}
+
+impl Default for NotionClientUnauthenticated {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+trait NotionRequestBuilder {
+    fn add_notion_authorisation_token(self, authorisation_token: &str) -> reqwest::RequestBuilder;
+}
+impl NotionRequestBuilder for reqwest::RequestBuilder {
+    fn add_notion_authorisation_token(self, authorisation_token: &str) -> reqwest::RequestBuilder {
+        self.header(
+            reqwest::header::AUTHORIZATION,
+            reqwest::header::HeaderValue::from_str(&("Bearer ".to_string() + authorisation_token))
+                .expect("string should be valid for header"),
+        )
+    }
+}
+
+fn make_notion_client() -> reqwest::Client {
     // client for notion requests
     reqwest::Client::builder()
-        .add_notion_headers(authorisation_token)
-        .expect("authorisation token should be a valid string")
+        .add_notion_headers()
+        .expect("this should work")
         .build()
         .expect("this should work")
-}
-pub async fn _get_pages_from_notion_database(
-    authorisation_token: &str,
-    database_id: &str,
-) -> Result<NotionPagesResponse, reqwest::Error> {
-    // client for notion requests
-    let notion_client = _make_notion_client(authorisation_token);
-
-    notion_client
-        .post("https://api.notion.com/v1/databases/".to_owned() + database_id + "/query")
-        .send()
-        .await?
-        .json()
-        .await
 }
