@@ -13,7 +13,7 @@ description = "Some opinionated useful utilities for setting up otel tracing in 
 [dependencies]
 # error types
 thiserror = "1.0.58"
-anyhow = "1.0.72"
+anyhow = "1.0.82"
 # tokio tracing
 tracing = "0.1.40"
 # Implements the types defined in the Otel spec
