@@ -39,7 +39,7 @@ typeshare = "1.0.1"
 figment = { version = "0.10.18", features = ["toml", "env"] }
 
 # error types
-thiserror = "1.0.58"
+thiserror = "1.0.59"
 anyhow = "1.0.82"
 
 # tokio tracing crate
